@@ -3,6 +3,6 @@
 
 #include <embree3/rtcore.h>
 
-int load_obj(RTCDevice * device, RTCScene * scene, char * fname, int id);
+int load_obj(RTCDevice device, RTCScene scene, char * fname, int id);
 
 #endif
