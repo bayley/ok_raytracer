@@ -8,8 +8,10 @@
 int load_obj(RTCDevice device, RTCScene scene, char * fname, int id) {
 	RTCGeometry geom = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
 	int num_triangles = 0, num_vertices = 0;
-
-	FILE * in = fopen(fname, "r");
+	
+	FILE * in = NULL;
+	in = fopen(fname, "r");
+	if (in == NULL) return -1;
   char * line = NULL; size_t len = 0; ssize_t nread;
   while ((nread = getline(&line, &len, in)) != -1) {
     if (line[0] == 'v') num_vertices++;
@@ -42,4 +44,5 @@ int load_obj(RTCDevice device, RTCScene scene, char * fname, int id) {
 	rtcReleaseGeometry(geom);
 
 	printf("Loaded file %s with %d vertices and %d faces\n", fname, num_vertices, num_triangles);
+	return 1;
 }

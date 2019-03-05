@@ -32,6 +32,10 @@ inline float rangle() {
   return (float)(M_PI * (double)(rand())/(double)(RAND_MAX));
 }
 
+inline float randf() {
+	return (float)((double)(rand()) / (double)(RAND_MAX));
+}
+
 inline vec3f random_dir(vec3f n, float backside) {
   vec3f u = local_u(n);
   vec3f v = n.cross(u);

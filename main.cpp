@@ -23,7 +23,7 @@ vec3f sample_hdri(RTCRayHit * rh, int w, int h, float radius) {
 	return hdri[v * w + u];
 }
 
-void load_hdri(char * fname, int hdri_w, int hdri_h) {
+int load_hdri(char * fname, int hdri_w, int hdri_h) {
 	unsigned char *h_red, *h_green, *h_blue;
 
 	h_red = (unsigned char *)malloc(hdri_h * hdri_w);
@@ -31,13 +31,14 @@ void load_hdri(char * fname, int hdri_w, int hdri_h) {
 	h_blue = (unsigned char *)malloc(hdri_h * hdri_w);
 	hdri = (vec3f *)malloc(hdri_h * hdri_w * sizeof(vec3f));
 
-	read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, fname);
+	if (read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, fname) < 0) return -1;
 
 	for (int i = 0; i < hdri_w * hdri_h; i++) {
 		hdri[i] = {(float)h_red[i] / 255.f, (float)h_green[i] / 255.f, (float)h_blue[i] / 255.f};
 	}
 
 	free(h_red); free(h_green); free(h_blue);
+	return 1;
 }
 
 int main(int argc, char ** argv) {
@@ -52,9 +53,15 @@ int main(int argc, char ** argv) {
 	RTCScene scene = rtcNewScene(device);
 
 	int hdri_w = 1440, hdri_h = 1440;
-	load_hdri((char*)"textures/bliss.bmp", hdri_w, hdri_h);
+	if (load_hdri((char*)"textures/bliss.bmp", hdri_w, hdri_h) < 0) {
+		printf("HDRI not found\n");
+		return -1;
+	}
 
-	load_obj(device, scene, argv[1], 0);
+	if (load_obj(device, scene, argv[1], 0) < 0) {
+		printf("%s not found\n", argv[1]);
+		return -1;
+	}
 	brdfs[0] = brdf_lambert;
 	base_colors[0] = {1.f, 1.f, 1.f};
 
@@ -89,11 +96,8 @@ int main(int argc, char ** argv) {
 				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
-				float r_row = (float)((double)rand() / (double)RAND_MAX);
-				float r_col = (float)((double)rand() / (double)RAND_MAX);
-
 				set_org(&rh, cam.eye);
-				set_dir(&rh, cam.lookat((float)row + r_row, (float)col + r_col));
+				set_dir(&rh, cam.lookat((float)row + randf(), (float)col + randf()));
 
 				rtcIntersect1(scene, &context, &rh);
 				last_id = rh.hit.geomID;

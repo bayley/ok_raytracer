@@ -110,10 +110,11 @@ void write_bmp_gs(unsigned char *data,
 	fclose(f);
 }
 
-void read_bmp(unsigned char *red, unsigned char *green, unsigned char *blue,
+int read_bmp(unsigned char *red, unsigned char *green, unsigned char *blue,
 						int w, int h, char *fname) {
-	FILE *f;
+	FILE *f = NULL;
 	f = fopen(fname, "rb");
+	if (f == NULL) return -1;
 
 	unsigned char *img = (unsigned char*) malloc(3 * w * h);
 	int sz = fread(img, sizeof(unsigned char), 54, f);
@@ -125,4 +126,5 @@ void read_bmp(unsigned char *red, unsigned char *green, unsigned char *blue,
 		blue[k] = img[i];
 	}
 	fclose(f);
+	return 1;
 }
