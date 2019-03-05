@@ -36,7 +36,7 @@ public:
 	Camera();
 	Camera(float ex, float ey, float ez, float dx, float dy, float dz, float theta, int w, int h);
 public:
-	vec3f lookat(int x, int y);
+	vec3f lookat(float x, float y);
 public:
 	void move(float x, float y, float z);
 	void point(float x, float y, float z);

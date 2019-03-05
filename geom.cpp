@@ -64,7 +64,7 @@ Camera::Camera(float ex, float ey, float ez, float dx, float dy, float dz, float
 	update(ex, ey, ez, dx, dy, dz, theta, w, h);
 }
 
-vec3f Camera::lookat(int x, int y) {
+vec3f Camera::lookat(float x, float y) {
 	x -= width / 2;
 	y -= height / 2;
 	return dir + u * x + v * y;

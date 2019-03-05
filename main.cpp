@@ -23,29 +23,42 @@ vec3f sample_hdri(RTCRayHit * rh, int w, int h, float radius) {
 	return hdri[v * w + u];
 }
 
+void load_hdri(char * fname, int hdri_w, int hdri_h) {
+	unsigned char *h_red, *h_green, *h_blue;
+
+	h_red = (unsigned char *)malloc(hdri_h * hdri_w);
+	h_green = (unsigned char *)malloc(hdri_h * hdri_w);
+	h_blue = (unsigned char *)malloc(hdri_h * hdri_w);
+	hdri = (vec3f *)malloc(hdri_h * hdri_w * sizeof(vec3f));
+
+	read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, fname);
+
+	for (int i = 0; i < hdri_w * hdri_h; i++) {
+		hdri[i] = {(float)h_red[i] / 255.f, (float)h_green[i] / 255.f, (float)h_blue[i] / 255.f};
+	}
+
+	free(h_red); free(h_green); free(h_blue);
+}
+
 int main(int argc, char ** argv) {
+	if (argc < 2) {
+		printf("Usage: embree_test <filename> [n_aa] [n_diffuse]\n");
+		return -1;
+	}
+
 	srand(time(0));
 
 	RTCDevice device = rtcNewDevice("");
 	RTCScene scene = rtcNewScene(device);
 
-	load_obj(device, scene, (char*)"models/teapot.obj", 0);
+	int hdri_w = 1440, hdri_h = 1440;
+	load_hdri((char*)"textures/bliss.bmp", hdri_w, hdri_h);
+
+	load_obj(device, scene, argv[1], 0);
 	brdfs[0] = brdf_lambert;
 	base_colors[0] = {1.f, 1.f, 1.f};
 
 	rtcCommitScene(scene);
-
-	int hdri_w = 1440, hdri_h = 1440;
-	unsigned char *h_red, *h_green, *h_blue;
-	h_red = (unsigned char*)malloc(hdri_h * hdri_w);
-	h_green = (unsigned char*)malloc(hdri_h * hdri_w);
-	h_blue = (unsigned char*)malloc(hdri_h * hdri_w);
-	hdri = (vec3f *)malloc(hdri_h * hdri_w * sizeof(vec3f));
-	read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, (char*)"textures/bliss.bmp");
-	for (int i = 0; i < hdri_w * hdri_h; i++) {
-		hdri[i] = {(float)h_red[i] / 255.f, (float)h_green[i] / 255.f, (float)h_blue[i] / 255.f};
-	}
-	free(h_red); free(h_green); free(h_blue);
 
 	BMPC output(1000, 1000);
 
@@ -55,6 +68,10 @@ int main(int argc, char ** argv) {
 	cam.zoom(0.8f);
 	cam.resize(output.width, output.height);
 
+	int n_aa = 16, n_diffuse = 8;
+	if (argc > 2) n_aa = atoi(argv[2]);
+	if (argc > 3) n_diffuse = atoi(argv[3]);
+
 	RTCRayHit rh;
 	RTCIntersectContext context;
 	rtcInitIntersectContext(&context);
@@ -62,54 +79,62 @@ int main(int argc, char ** argv) {
 	vec3f hit_p, hit_n, last_dir;
 	int last_id;
 	float backside;
-	vec3f g_illum;
+	vec3f total, diffuse;
 
 	for (int row = 0; row < output.width; row++) {
 		for (int col = 0; col < output.width; col++) {
-			rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
-			rh.hit.instID[0] = -1; rh.hit.geomID = -1;
-
-			set_org(&rh, cam.eye);
-			set_dir(&rh, cam.lookat(row, col));
-
-			rtcIntersect1(scene, &context, &rh);
-			last_id = rh.hit.geomID;
-
-			if (last_id == -1) {
-				vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f);
-				output.set_px(row, col, emit.x, emit.y, emit.z);
-				continue;
-			} 
-
-			hit_p = eval_ray(&rh, rh.ray.tfar);
-			hit_n = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
-			hit_n.normalize();
-			last_dir = {rh.ray.dir_x, rh.ray.dir_y, rh.ray.dir_z};
-			backside = last_dir.dot(hit_n) > 0.f ? -1.f : 1.f;
-
-			g_illum = {0.f, 0.f, 0.f};
-
-			for (int sample = 0; sample < 128; sample++) {
-				vec3f out_dir = random_dir(hit_n, backside);
-
-				float cos_g = backside * hit_n.dot(out_dir);
-				float pdf = brdfs[last_id](0.f, 0.f, 0.f, 0.f);
-				
+			total = {0.f, 0.f, 0.f};
+			
+			for (int aa = 0; aa < n_aa; aa++) {
 				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
-				set_org(&rh, hit_p);
-				set_dir(&rh, out_dir);
+				float r_row = (float)((double)rand() / (double)RAND_MAX);
+				float r_col = (float)((double)rand() / (double)RAND_MAX);
+
+				set_org(&rh, cam.eye);
+				set_dir(&rh, cam.lookat((float)row + r_row, (float)col + r_col));
 
 				rtcIntersect1(scene, &context, &rh);
+				last_id = rh.hit.geomID;
+
+				if (last_id == -1) {
+					total += sample_hdri(&rh, hdri_w, hdri_h, 25.f);
+					continue;
+				} 
+
+				hit_p = eval_ray(&rh, rh.ray.tfar);
+				hit_n = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
+				hit_n.normalize();
+				last_dir = {rh.ray.dir_x, rh.ray.dir_y, rh.ray.dir_z};
+				backside = last_dir.dot(hit_n) > 0.f ? -1.f : 1.f;
+
+				diffuse = {0.f, 0.f, 0.f};
+
+				for (int sample = 0; sample < n_diffuse; sample++) {
+					vec3f out_dir = random_dir(hit_n, backside);
+
+					float cos_g = backside * hit_n.dot(out_dir);
+					float pdf = brdfs[last_id](0.f, 0.f, 0.f, 0.f); //TODO: use real angles!
 				
-				if (rh.hit.geomID == -1) {
-					vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f);
-					g_illum += emit * base_colors[last_id] * cos_g * pdf;
+					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
+					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
+
+					set_org(&rh, hit_p);
+					set_dir(&rh, out_dir);
+
+					rtcIntersect1(scene, &context, &rh);
+				
+					if (rh.hit.geomID == -1) {
+						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f);
+						diffuse += emit * base_colors[last_id] * cos_g * pdf;
+					}
 				}
+				diffuse /= (float)n_diffuse;
+				total += diffuse;
 			}
-			g_illum /= 128.f;
-			output.set_px(row, col, g_illum.x, g_illum.y, g_illum.z);
+			total /= (float)n_aa;
+			output.set_px(row, col, total.x, total.y, total.z);
 		}
 	}
 

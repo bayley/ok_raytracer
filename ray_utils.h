@@ -78,6 +78,8 @@ inline vec3f intersect_hdri(RTCRayHit * rh, float r) {
 	float theta, phi;
 	theta = acos(p.z / r);
 	phi = atan2(p.x, p.y) + M_PI;
+	if (theta >=  M_PI) theta -= M_PI;
+	if (phi >= 2.f * M_PI) phi -= 2.f * M_PI;
 
 	result.x = phi / (2.f * M_PI);
 	result.y = theta / M_PI;
