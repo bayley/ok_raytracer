@@ -36,7 +36,7 @@ inline float randf() {
 	return (float)((double)(rand()) / (double)(RAND_MAX));
 }
 
-inline vec3f random_dir(vec3f n, float backside) {
+inline vec3f random_dir(vec3f n) {
   vec3f u = local_u(n);
   vec3f v = n.cross(u);
 
@@ -44,7 +44,7 @@ inline vec3f random_dir(vec3f n, float backside) {
 
   float c_u = sinf(hit_theta) * cosf(hit_phi);
   float c_v = sinf(hit_theta) * sinf(hit_phi);
-  float c_n = cosf(hit_theta) * backside;
+  float c_n = cosf(hit_theta);
 
   vec3f out_dir = u * c_u + v * c_v + n * c_n;
   out_dir.normalize();

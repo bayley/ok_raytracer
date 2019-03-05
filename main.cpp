@@ -72,8 +72,6 @@ int main(int argc, char ** argv) {
 	Camera cam;
 	cam.move(5.f, 8.f, 0.f);
 	cam.point(-1.f, -1.5f, 0.f);
-	//cam.move(0.f, 6.5f, -8.f);
-	//cam.point(0.f, -1.f, 1.5f);
 	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
 
@@ -86,8 +84,7 @@ int main(int argc, char ** argv) {
 	rtcInitIntersectContext(&context);
 
 	vec3f hit_p, hit_n, last_dir;
-	int last_id;
-	float backside;
+	int last_id, side = 0;
 	vec3f total, diffuse;
 
 	for (int row = 0; row < output.width; row++) {
@@ -110,17 +107,21 @@ int main(int argc, char ** argv) {
 				} 
 
 				hit_p = eval_ray(&rh, rh.ray.tfar);
-				hit_n = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
-				hit_n.normalize();
+
 				last_dir = {rh.ray.dir_x, rh.ray.dir_y, rh.ray.dir_z};
-				backside = last_dir.dot(hit_n) > 0.f ? -1.f : 1.f;
+				last_dir.normalize();
+
+				hit_n = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
+				side = 0; if (last_dir.dot(hit_n) > 0.f) {hit_n *= -1.f; side = 1;};
+				hit_n.normalize();
 
 				diffuse = {0.f, 0.f, 0.f};
 
+				float cos_g, theta_i, phi_i, theta_o, phi_o;
 				for (int sample = 0; sample < n_diffuse; sample++) {
-					vec3f out_dir = random_dir(hit_n, backside);
+					vec3f out_dir = random_dir(hit_n);
 
-					float cos_g = backside * hit_n.dot(out_dir);
+					cos_g = hit_n.dot(out_dir);
 					float pdf = brdfs[last_id](0.f, 0.f, 0.f, 0.f); //TODO: use real angles!
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
