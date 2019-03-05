@@ -52,8 +52,8 @@ int main(int argc, char ** argv) {
 	RTCDevice device = rtcNewDevice("");
 	RTCScene scene = rtcNewScene(device);
 
-	int hdri_w = 1440, hdri_h = 1440;
-	if (load_hdri((char*)"textures/grass2.bmp", hdri_w, hdri_h) < 0) {
+	int hdri_w = 1500, hdri_h = 750;
+	if (load_hdri((char*)"textures/grass.bmp", hdri_w, hdri_h) < 0) {
 		printf("HDRI not found\n");
 		return -1;
 	}
