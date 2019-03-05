@@ -16,6 +16,13 @@ brdf_t brdfs[64];
 vec3f base_colors[64];
 vec3f * hdri;
 
+vec3f sample_hdri(RTCRayHit * rh, int w, int h, float radius) {
+	vec3f uv = intersect_hdri(rh, 25.f);
+	int u = (int)(w * uv.x);
+	int v = (int)(h * uv.y);
+	return hdri[v * w + u];
+}
+
 int main(int argc, char ** argv) {
 	srand(time(0));
 
@@ -52,7 +59,7 @@ int main(int argc, char ** argv) {
 	RTCIntersectContext context;
 	rtcInitIntersectContext(&context);
 
-	vec3f hit_p, hit_n, last_dir, uv;
+	vec3f hit_p, hit_n, last_dir;
 	int last_id;
 	float backside;
 	vec3f g_illum;
@@ -69,11 +76,8 @@ int main(int argc, char ** argv) {
 			last_id = rh.hit.geomID;
 
 			if (last_id == -1) {
-				//output.set_px(row, col, 1.f, 1.f, 1.f);
-				uv = intersect_hdri(&rh, 25.f);
-				int u = (int)(hdri_w * uv.x);
-				int v = (int)(hdri_h * uv.y);
-				output.set_px(row, col, hdri[v * hdri_w + u].x, hdri[v * hdri_w + u].y, hdri[v * hdri_w + v].z);
+				vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f);
+				output.set_px(row, col, emit.x, emit.y, emit.z);
 				continue;
 			} 
 
@@ -100,10 +104,7 @@ int main(int argc, char ** argv) {
 				rtcIntersect1(scene, &context, &rh);
 				
 				if (rh.hit.geomID == -1) {
-					uv = intersect_hdri(&rh, 25.f);
-					int u = (int)(hdri_w * uv.x);
-					int v = (int)(hdri_h * uv.y);
-					vec3f emit = {hdri[v * hdri_w + u].x, hdri[v * hdri_w + u].y, hdri[v * hdri_w + v].z};
+					vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f);
 					g_illum += emit * base_colors[last_id] * cos_g * pdf;
 				}
 			}
