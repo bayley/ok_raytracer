@@ -67,7 +67,7 @@ int main(int argc, char ** argv) {
 
 	rtcCommitScene(scene);
 
-	BMPC output(1000, 1000);
+	BMPC output(1920, 1080);
 
 	Camera cam;
 	cam.move(5.f, 8.f, 0.f);
@@ -87,7 +87,7 @@ int main(int argc, char ** argv) {
 	int last_id, side = 0;
 	vec3f total, diffuse;
 
-	for (int row = 0; row < output.width; row++) {
+	for (int row = 0; row < output.height; row++) {
 		for (int col = 0; col < output.width; col++) {
 			total = {0.f, 0.f, 0.f};
 			

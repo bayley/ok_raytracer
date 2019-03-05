@@ -60,6 +60,7 @@ void vec3f::normalize() {
 Camera::Camera() {
 	update(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f, 1000, 1000);
 }
+
 Camera::Camera(float ex, float ey, float ez, float dx, float dy, float dz, float theta, int w, int h) {
 	update(ex, ey, ez, dx, dy, dz, theta, w, h);
 }
@@ -104,7 +105,6 @@ void Camera::update(float ex, float ey, float ez, float dx, float dy, float dz, 
 	}
 	
 	v = dir.cross(u);
-	v *= u.abs() / v.abs() * (float)h/(float)w;
 
 	width = w;
 	height = h;

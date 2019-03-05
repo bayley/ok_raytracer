@@ -12,9 +12,10 @@ BMPC::BMPC(int w, int h) {
 }
 
 void BMPC::set_px(int u, int v, unsigned char r, unsigned char g, unsigned char b) {
-	red[u * height + v] = r;
-  green[u * height + v] = g;
-  blue[u * height + v] = b;
+	if (u >= height || v >= width) return;
+	red[u * width + v] = r;
+  green[u * width + v] = g;
+  blue[u * width + v] = b;
 }
 
 void BMPC::set_px(int u, int v, float r, float g, float b) {
