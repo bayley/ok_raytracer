@@ -99,7 +99,7 @@ int main(int argc, char ** argv) {
 				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
 				set_org(&rh, cam.eye);
-				set_dir(&rh, cam.lookat((float)row + randf(), (float)col + randf()));
+				set_dir(&rh, cam.lookat((float)col + randf(), (float)row + randf()));
 
 				rtcIntersect1(scene, &context, &rh);
 				last_id = rh.hit.geomID;
