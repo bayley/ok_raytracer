@@ -70,7 +70,7 @@ int main(int argc, char ** argv) {
 	BMPC output(1920, 1080);
 
 	Camera cam;
-	cam.move(5.f, 8.f, 0.f);
+	cam.move(5.f, 8.f, 2.f);
 	cam.point(-1.f, -1.5f, 0.f);
 	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
