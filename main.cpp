@@ -53,7 +53,7 @@ int main(int argc, char ** argv) {
 	RTCScene scene = rtcNewScene(device);
 
 	int hdri_w = 1440, hdri_h = 1440;
-	if (load_hdri((char*)"textures/bliss.bmp", hdri_w, hdri_h) < 0) {
+	if (load_hdri((char*)"textures/grass2.bmp", hdri_w, hdri_h) < 0) {
 		printf("HDRI not found\n");
 		return -1;
 	}
@@ -71,8 +71,10 @@ int main(int argc, char ** argv) {
 
 	Camera cam;
 	cam.move(5.f, 8.f, 0.f);
-	cam.point(-1.f, -1.5f,0.f);
-	cam.zoom(0.8f);
+	cam.point(-1.f, -1.5f, 0.f);
+	//cam.move(0.f, 6.5f, -8.f);
+	//cam.point(0.f, -1.f, 1.5f);
+	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
 
 	int n_aa = 16, n_diffuse = 8;
