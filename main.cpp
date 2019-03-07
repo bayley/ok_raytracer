@@ -34,7 +34,9 @@ int load_hdri(char * fname, int hdri_w, int hdri_h) {
 	if (read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, fname) < 0) return -1;
 
 	for (int i = 0; i < hdri_w * hdri_h; i++) {
-		hdri[i] = {(float)h_red[i] / 255.f, (float)h_green[i] / 255.f, (float)h_blue[i] / 255.f};
+		float r, g, b;
+		r = (float)h_red[i] / 255.f; g = (float)h_green[i] / 255.f; b = (float)h_blue[i] / 255.f;
+		hdri[i] = {powf(r, 2.2f), powf(g, 2.2f), powf(b, 2.2f)}; //input is sRGB
 	}
 
 	free(h_red); free(h_green); free(h_blue);
@@ -62,7 +64,7 @@ int main(int argc, char ** argv) {
 		printf("%s not found\n", argv[1]);
 		return -1;
 	}
-	brdfs[0] = brdf_lambert;
+	brdfs[0] = brdf_blinn_phong;//brdf_lambert;
 	base_colors[0] = {1.f, 1.f, 1.f};
 
 	rtcCommitScene(scene);
@@ -102,7 +104,7 @@ int main(int argc, char ** argv) {
 				last_id = rh.hit.geomID;
 
 				if (last_id == -1) {
-					total += sample_hdri(&rh, hdri_w, hdri_h, 25.f);
+					total += sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
 					continue;
 				} 
 
@@ -117,12 +119,13 @@ int main(int argc, char ** argv) {
 
 				diffuse = {0.f, 0.f, 0.f};
 
-				float cos_g, theta_i, phi_i, theta_o, phi_o;
+				float cos_g, th, td, ph, pd;
 				for (int sample = 0; sample < n_diffuse; sample++) {
 					vec3f out_dir = random_dir(hit_n);
 
 					cos_g = hit_n.dot(out_dir);
-					float pdf = brdfs[last_id](0.f, 0.f, 0.f, 0.f); //TODO: use real angles!
+					get_angles(last_dir, out_dir, hit_n, &th, &td, &ph, &pd); //TODO: optimize me!
+					vec3f pdf = brdfs[last_id](th, td, ph, pd);
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
@@ -133,7 +136,7 @@ int main(int argc, char ** argv) {
 					rtcIntersect1(scene, &context, &rh);
 				
 					if (rh.hit.geomID == -1) {
-						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f);
+						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
 						diffuse += emit * base_colors[last_id] * cos_g * pdf;
 					}
 				}
@@ -141,7 +144,7 @@ int main(int argc, char ** argv) {
 				total += diffuse;
 			}
 			total /= (float)n_aa;
-			output.set_px(row, col, total.x, total.y, total.z);
+			output.set_px(row, col, powf(total.x, 1.f / 2.2), powf(total.y, 1.f / 2.2), powf(total.z, 1.f / 2.2)); //gamma = 2.2
 		}
 	}
 

@@ -3,9 +3,11 @@
 
 #include "geom.h"
 
-typedef float (*brdf_t)(float, float, float, float);
+typedef vec3f (*brdf_t)(float, float, float, float);
 
 //uniform BRDF
-float brdf_lambert(float theta_i, float phi_i, float theta_o, float phi_o);
+vec3f brdf_lambert(float th, float td, float ph, float pd);
 
+//blinn-phong
+vec3f brdf_blinn_phong(float th, float td, float ph, float pd);
 #endif

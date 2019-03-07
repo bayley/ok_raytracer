@@ -67,4 +67,7 @@ enum {
 	AXIS_Z,
 };
 
+//utility functions
+vec3f rotate(vec3f v, vec3f a, float theta);
+
 #endif

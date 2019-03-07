@@ -109,3 +109,20 @@ void Camera::update(float ex, float ey, float ez, float dx, float dy, float dz, 
 	width = w;
 	height = h;
 }
+
+vec3f rotate(vec3f v, vec3f a, float theta) {
+  vec3f out, cross;
+
+  float ct = cosf(theta), st = sinf(theta);
+  out = v * ct;   
+
+  float tmp = a.dot(v);
+  tmp *= (1.f - ct);
+
+  out += a * tmp;
+   
+  cross = a.cross(v);
+  out += cross * st;
+
+  return out;
+}
