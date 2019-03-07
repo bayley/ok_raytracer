@@ -22,6 +22,8 @@ public:
 	vec3f operator*=(float c);
 	vec3f operator/=(float c);
 public:
+	vec3f pow(float c);
+public:
 	vec3f cross(const vec3f& u);
 	float dot(const vec3f& u);
 public:

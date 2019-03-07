@@ -66,9 +66,6 @@ inline void get_angles(vec3f in, vec3f out, vec3f n, float * th, float * td, flo
 	h_v = h.dot(v);
 	h_n = h.dot(n);
 
-	*th = acos(h_n);
-	*ph = atan2(h_v, h_u);	
-
 	//in in n-u-v frame
 	float i_u, i_v, i_n;
 	i_u = in.dot(u);
@@ -76,10 +73,14 @@ inline void get_angles(vec3f in, vec3f out, vec3f n, float * th, float * td, flo
 	i_n = in.dot(n);	
 
 	vec3f h_nuv = {h_u, h_v, h_n}, i_nuv = {i_u, i_v, i_n};
+	vec3f n_nuv = {0.f, 0.f, 1.f}, v_nuv = {0.f, 1.f, 0.f};
 
 	vec3f tmp, diff;
-	tmp = rotate(i_nuv, n, -*ph);
-	diff = rotate(tmp, v, -*th);
+	tmp = rotate(i_nuv, n_nuv, -*ph);
+	diff = rotate(tmp, v_nuv, -*th);
+
+	*th = acos(h_n);
+	*ph = atan2(h_v, h_u);	
 
 	*td = acos(diff.z);
 	*pd = atan2(diff.y, diff.x);	

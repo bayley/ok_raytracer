@@ -38,6 +38,10 @@ vec3f vec3f::operator/=(float c) {
 	return *this;
 }
 
+vec3f vec3f::pow(float c) {
+	return {powf(x, c), powf(y, c), powf(z, c)};
+}
+
 vec3f vec3f::cross(const vec3f& u) {
 	return vec3f(y * u.z - z * u.y, z * u.x - x * u.z, x * u.y - y * u.x);
 }

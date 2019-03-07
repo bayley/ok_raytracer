@@ -12,8 +12,7 @@
 #include "bmpc.h"
 #include "brdf.h"
 
-brdf_t brdfs[64];
-vec3f base_colors[64];
+PrincipledBRDF brdf_objs[64];
 vec3f * hdri;
 
 vec3f sample_hdri(RTCRayHit * rh, int w, int h, float radius) {
@@ -34,9 +33,9 @@ int load_hdri(char * fname, int hdri_w, int hdri_h) {
 	if (read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, fname) < 0) return -1;
 
 	for (int i = 0; i < hdri_w * hdri_h; i++) {
-		float r, g, b;
-		r = (float)h_red[i] / 255.f; g = (float)h_green[i] / 255.f; b = (float)h_blue[i] / 255.f;
-		hdri[i] = {powf(r, 2.2f), powf(g, 2.2f), powf(b, 2.2f)}; //input is sRGB
+		hdri[i] = {(float)h_red[i], (float)h_green[i], (float)h_blue[i]};
+		hdri[i] /= 255.f;
+		hdri[i] = hdri[i].pow(2.2f);
 	}
 
 	free(h_red); free(h_green); free(h_blue);
@@ -64,8 +63,18 @@ int main(int argc, char ** argv) {
 		printf("%s not found\n", argv[1]);
 		return -1;
 	}
-	brdfs[0] = brdf_blinn_phong;//brdf_lambert;
-	base_colors[0] = {1.f, 1.f, 1.f};
+
+	brdf_objs[0].subsurface = 0.f;
+	brdf_objs[0].metallic = 0.f;
+	brdf_objs[0].specular = 1.f;
+	brdf_objs[0].speculartint = 0.f;
+	brdf_objs[0].roughness = 0.7f;
+	brdf_objs[0].anisotropic = 0.f;
+	brdf_objs[0].sheen = 0.f;
+	brdf_objs[0].sheentint = 0.f;
+	brdf_objs[0].clearcoat = 0.f;
+	brdf_objs[0].clearcoatgloss = 0.5f;
+	brdf_objs[0].base_color = {1.f, 1.f, 1.f};
 
 	rtcCommitScene(scene);
 
@@ -88,6 +97,7 @@ int main(int argc, char ** argv) {
 	vec3f hit_p, hit_n, last_dir;
 	int last_id, side = 0;
 	vec3f total, diffuse;
+	float cos_i;
 
 	for (int row = 0; row < output.height; row++) {
 		for (int col = 0; col < output.width; col++) {
@@ -114,18 +124,21 @@ int main(int argc, char ** argv) {
 				last_dir.normalize();
 
 				hit_n = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
-				side = 0; if (last_dir.dot(hit_n) > 0.f) {hit_n *= -1.f; side = 1;};
 				hit_n.normalize();
+			
+				cos_i = -hit_n.dot(last_dir);	
+				side = 0; if (cos_i < 0.f) {hit_n *= -1.f; side = 1; cos_i = -cos_i;};
 
 				diffuse = {0.f, 0.f, 0.f};
 
-				float cos_g, th, td, ph, pd;
+				float cos_o, th, td, ph, pd;
 				for (int sample = 0; sample < n_diffuse; sample++) {
 					vec3f out_dir = random_dir(hit_n);
 
-					cos_g = hit_n.dot(out_dir);
+					cos_o = hit_n.dot(out_dir);
 					get_angles(last_dir, out_dir, hit_n, &th, &td, &ph, &pd); //TODO: optimize me!
-					vec3f pdf = brdfs[last_id](th, td, ph, pd);
+					//vec3f pdf = brdfs[last_id](cos_i, cos_o, th, td, ph, pd);
+					vec3f pdf = brdf_objs[last_id].sample(cos_i, cos_o, th, td, ph, pd);
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
@@ -136,15 +149,16 @@ int main(int argc, char ** argv) {
 					rtcIntersect1(scene, &context, &rh);
 				
 					if (rh.hit.geomID == -1) {
-						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
-						diffuse += emit * base_colors[last_id] * cos_g * pdf;
+						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f) * 5.f; //TODO: optimize me!
+						diffuse += pdf * emit * cos_o;
 					}
 				}
 				diffuse /= (float)n_diffuse;
 				total += diffuse;
 			}
 			total /= (float)n_aa;
-			output.set_px(row, col, powf(total.x, 1.f / 2.2), powf(total.y, 1.f / 2.2), powf(total.z, 1.f / 2.2)); //gamma = 2.2
+			total = total.pow(1.f / 2.2f);
+			output.set_px(row, col, total.x, total.y, total.z);
 		}
 	}
 
