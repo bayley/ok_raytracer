@@ -65,10 +65,10 @@ int main(int argc, char ** argv) {
 	}
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 1.0f;
-	brdf_objs[0].specular = 1.0f;
+	brdf_objs[0].metallic = 0.0f;
+	brdf_objs[0].specular = 0.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.5f;
+	brdf_objs[0].roughness = 0.2f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
@@ -137,7 +137,6 @@ int main(int argc, char ** argv) {
 
 					cos_o = hit_n.dot(out_dir);
 					get_angles(last_dir, out_dir, hit_n, &th, &td, &ph, &pd); //TODO: optimize me!
-					//vec3f pdf = brdfs[last_id](cos_i, cos_o, th, td, ph, pd);
 					vec3f pdf = brdf_objs[last_id].sample(cos_i, cos_o, th, td, ph, pd);
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
@@ -149,12 +148,12 @@ int main(int argc, char ** argv) {
 					rtcIntersect1(scene, &context, &rh);
 				
 					if (rh.hit.geomID == -1) {
-						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f) * 5.f; //TODO: optimize me!
+						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
 						diffuse += pdf * emit * cos_o;
 					}
 				}
 				diffuse /= (float)n_diffuse;
-				total += diffuse;
+				total += diffuse * M_PI * 2 * M_PI; //cheating!?
 			}
 			total /= (float)n_aa;
 			total = total.pow(1.f / 2.2f);
