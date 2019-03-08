@@ -53,8 +53,8 @@ int main(int argc, char ** argv) {
 	RTCDevice device = rtcNewDevice("");
 	RTCScene scene = rtcNewScene(device);
 
-	int hdri_w = 1500, hdri_h = 750;
-	if (load_hdri((char*)"textures/grass.bmp", hdri_w, hdri_h) < 0) {
+	int hdri_w = 2048, hdri_h = 1024;
+	if (load_hdri((char*)"textures/studio.bmp", hdri_w, hdri_h) < 0) {
 		printf("HDRI not found\n");
 		return -1;
 	}
@@ -72,8 +72,8 @@ int main(int argc, char ** argv) {
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 1.0f;
-	brdf_objs[0].clearcoatgloss = 0.0f;
+	brdf_objs[0].clearcoat = 4.0f;
+	brdf_objs[0].clearcoatgloss = 0.7f;
 	brdf_objs[0].base_color = {1.0f, 1.0f, 1.0f};
 
 	rtcCommitScene(scene);
@@ -81,7 +81,7 @@ int main(int argc, char ** argv) {
 	BMPC output(1920, 1080);
 
 	Camera cam;
-	cam.move(5.f, 8.f, 0.f);
+	cam.move(5.f, 8.f, 2.f);
 	cam.point(-1.f, -1.5f, 0.f);
 	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
