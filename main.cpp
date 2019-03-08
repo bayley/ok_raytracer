@@ -65,10 +65,10 @@ int main(int argc, char ** argv) {
 	}
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 0.0f;
-	brdf_objs[0].specular = 0.0f;
+	brdf_objs[0].metallic = 1.0f;
+	brdf_objs[0].specular = 1.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.2f;
+	brdf_objs[0].roughness = 0.3f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
@@ -81,7 +81,7 @@ int main(int argc, char ** argv) {
 	BMPC output(1920, 1080);
 
 	Camera cam;
-	cam.move(5.f, 8.f, 2.f);
+	cam.move(5.f, 8.f, 0.f);
 	cam.point(-1.f, -1.5f, 0.f);
 	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
@@ -153,7 +153,7 @@ int main(int argc, char ** argv) {
 					}
 				}
 				diffuse /= (float)n_diffuse;
-				total += diffuse * M_PI * 2 * M_PI; //cheating!?
+				total += diffuse * M_PI * M_PI / 2.f; //normalization factor to conserve energy
 			}
 			total /= (float)n_aa;
 			total = total.pow(1.f / 2.2f);

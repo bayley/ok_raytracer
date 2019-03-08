@@ -43,6 +43,7 @@ vec3f PrincipledBRDF::sample(float ci, float co, float th, float td, float ph, f
 	vec3f spec_f_incident = (ones * (1.f - speculartint) + base_color * speculartint) * specular * 0.08f;
 	float spec_f_grazing = (1 - specular * 0.08f) * powf(1.f - c_td, 5.f);
 	float cc_f = .04f + 0.96f * powf(1.f - c_td, 5.f);
+	float m_f = specular; //TODO: fresnel term for metals
 
 	//specular G
 	float alpha_g_spec = (0.5f + roughness / 2.f) * (0.5f + roughness / 2.f);
@@ -56,7 +57,7 @@ vec3f PrincipledBRDF::sample(float ci, float co, float th, float td, float ph, f
 	//add them together, interpolating between dielectric and metallic
 	vec3f rd = base_color * fd;
 	vec3f rs = (spec_f_incident + ones * spec_f_grazing) * spec_gtr * spec_g;
-	vec3f rm = base_color * specular * spec_gtr * spec_g;
+	vec3f rm = base_color * m_f * spec_gtr * spec_g;
 	vec3f rcc = ones * cc_f * cc_gtr * cc_g;
 
 	return rd * (1.f - metallic) + (rs * (1.f - metallic) + rm * metallic + rcc) / (4.f * ci * co);
