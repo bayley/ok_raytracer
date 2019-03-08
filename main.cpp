@@ -65,16 +65,16 @@ int main(int argc, char ** argv) {
 	}
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 0.0f;
+	brdf_objs[0].metallic = 1.0f;
 	brdf_objs[0].specular = 1.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.1f;
+	brdf_objs[0].roughness = 0.5f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 0.0f;
-	brdf_objs[0].clearcoatgloss = 0.9f;
-	brdf_objs[0].base_color = {0.f, 0.0f, 0.0f};
+	brdf_objs[0].clearcoat = 1.0f;
+	brdf_objs[0].clearcoatgloss = 1.0f;
+	brdf_objs[0].base_color = {1.0f, 1.0f, 1.0f};
 
 	rtcCommitScene(scene);
 

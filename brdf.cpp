@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 
 #include "geom.h"
 #include "brdf.h"
@@ -17,48 +18,76 @@ PrincipledBRDF::PrincipledBRDF() {
 	base_color = {1.f, 1.f, 1.f};
 }
 
+float GTR1(float alpha, float cos) {
+	float norm = (alpha * alpha - 1.f) / (M_PI * log(alpha * alpha));
+	float tmp = (alpha * alpha - 1.f) * cos * cos + 1.f;
+	return norm / tmp;
+}
+
+float GTR2(float alpha, float cos) {
+	float norm = alpha * alpha / M_PI;
+	float tmp = (alpha * alpha - 1.f) * cos * cos + 1.f;
+	return norm / (tmp * tmp);
+}
+
+float GGX(float alpha, float cos) {
+	float a = alpha * alpha;
+	float b = cos * cos;
+	return 1.f / (cos + sqrt(a + b - a * b));
+}
+
+float schlick_F(float cos) {
+	float u = 1.f - cos;
+	float u2 = u * u;
+	return u2 * u2 * u;
+}
+
+vec3f lerp(vec3f a, vec3f b, float t) {
+	return a * (1.f - t) + b * t;
+}
+
+float lerp(float a, float b, float t) {
+	return a * (1.f - t) + b * t;
+}
+
 vec3f PrincipledBRDF::sample(float ci, float co, float th, float td, float ph, float pd) {
+	vec3f zeroes = {0.f, 0.f, 0.f};
 	vec3f ones = {1.f, 1.f, 1.f};
+	vec3f r_diffuse, r_sheen, r_specular, r_clearcoat;
 
 	//diffuse
 	float c_td = cosf(td);
 	float fd90 = .5f + 2.f * c_td * c_td * roughness;
-	float fd = 1.f / M_PI * (1.f + (fd90 - 1.f) * powf(1 - co, 5.f)) * (1.f + (fd90 - 1.f) * powf(1 - ci, 5.f));
+	float fd = 1.f / M_PI * lerp(1.f, fd90, schlick_F(co)) * lerp(1.f, fd90, schlick_F(ci));
 
-	//specular D
-	float alpha_spec = roughness * roughness;	
-	float alpha_cc = (1.f - clearcoatgloss) * (1.f - clearcoatgloss);
+	float fss90 = c_td * c_td * roughness;
+	float fss = lerp(1.f, fss90, schlick_F(co)) * lerp(1.f, fss90, schlick_F(ci));
+	float ss = 1.25f / M_PI * (fss * (1.f / (co + ci) - .5f) + .5f);
 
-	float c_th = cosf(th);
-	float tmp_spec = (alpha_spec * alpha_spec - 1.f) * c_th * c_th + 1.f;
-	float tmp_cc = (alpha_cc * alpha_cc - 1.f) * c_th * c_th + 1.f;
+	r_diffuse = base_color * lerp(fd, ss, subsurface) * (1.f - metallic);
 
-	float spec_gtr_norm = alpha_spec * alpha_spec / M_PI;
-	float cc_gtr_norm = (alpha_cc * alpha_cc - 1.f) / (M_PI * 2.f * log(alpha_cc));
-
-	float spec_gtr = spec_gtr_norm / (tmp_spec * tmp_spec);
-	float cc_gtr = 0.25f * clearcoat * cc_gtr_norm / tmp_cc;
+	//sheen
+	r_sheen = lerp(ones, base_color, sheentint) * sheen * schlick_F(c_td) * (1.f - metallic);
 
 	//specular F
-	vec3f spec_f_incident = (ones * (1.f - speculartint) + base_color * speculartint) * specular * 0.08f;
-	float spec_f_grazing = (1 - specular * 0.08f) * powf(1.f - c_td, 5.f);
-	float cc_f = .04f + 0.96f * powf(1.f - c_td, 5.f);
-	float m_f = specular; //TODO: fresnel term for metals
+	vec3f Fi_spec = lerp(ones, base_color, speculartint) * specular * 0.08f; //incident
+	vec3f Fg_spec = ones * (1 - specular * 0.08f) * schlick_F(c_td); //grazing
+	vec3f F_m = base_color * specular; //TODO: fresnel term for metals
 
-	//specular G
-	float alpha_g_spec = (0.5f + roughness / 2.f) * (0.5f + roughness / 2.f);
-	float alpha_g_cc = (0.5f + 0.25f / 2.f) * (0.5f + 0.25f / 2.f);
-	float ch_g = c_td > 0.f ? 1.f : 0.f;
-	float ti = sqrtf(1.f - ci * ci) / ci; //tan(theta_i)
+	//specular D, G
+	float c_th = cosf(th);
+	float alpha = fmaxf(roughness * roughness, 0.001f);
+	float D_spec = GTR2(alpha, c_th);
+	float G_spec = GGX(alpha, ci) * GGX(alpha, co);
 
-	float spec_g = ch_g * 2.f / (1.f + sqrtf(1.f + alpha_g_spec * alpha_g_spec * ti * ti));
-	float cc_g = ch_g * 2.f / (1.f + sqrtf(1.f + alpha_g_cc * alpha_g_cc * ti * ti));
+	//clearcoat
+	vec3f F_cc = ones * lerp(.04f, 1.f, schlick_F(c_td));
+	float D_cc = GTR1(lerp(.1f, 0.001f, clearcoatgloss), c_th);
+	float G_cc = GGX(.25f, ci) * GGX(.25f, co);
 
 	//add them together, interpolating between dielectric and metallic
-	vec3f rd = base_color * fd;
-	vec3f rs = (spec_f_incident + ones * spec_f_grazing) * spec_gtr * spec_g;
-	vec3f rm = base_color * m_f * spec_gtr * spec_g;
-	vec3f rcc = ones * cc_f * cc_gtr * cc_g;
+	r_specular = lerp(Fi_spec + Fg_spec, F_m, metallic) * D_spec * G_spec;
+	r_clearcoat = F_cc * D_cc * G_cc;
 
-	return rd * (1.f - metallic) + (rs * (1.f - metallic) + rm * metallic + rcc) / (4.f * ci * co);
+	return r_diffuse + r_sheen + r_specular + r_clearcoat;
 }
