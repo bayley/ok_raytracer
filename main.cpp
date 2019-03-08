@@ -153,7 +153,7 @@ int main(int argc, char ** argv) {
 					}
 				}
 				diffuse /= (float)n_diffuse;
-				total += diffuse * M_PI * M_PI / 2.f; //normalization factor to conserve energy
+				total += diffuse * 2.f * M_PI; //pdf is 1/(2pi)
 			}
 			total /= (float)n_aa;
 			total = total.pow(1.f / 2.2f);
