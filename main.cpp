@@ -72,9 +72,9 @@ int main(int argc, char ** argv) {
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 1.7f;
+	brdf_objs[0].clearcoat = 0.0f;
 	brdf_objs[0].clearcoatgloss = 0.9f;
-	brdf_objs[0].base_color = {1.f, 1.f, 1.f};
+	brdf_objs[0].base_color = {0.f, 0.0f, 0.0f};
 
 	rtcCommitScene(scene);
 
