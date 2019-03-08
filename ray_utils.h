@@ -40,7 +40,7 @@ inline vec3f random_dir(vec3f n) {
   vec3f u = local_u(n);
   vec3f v = n.cross(u);
 
-  float hit_theta = acosf(randf());
+  float hit_theta = rangle() / 2.f;
 	float hit_phi = rangle() * 2.f;
 
   float c_u = sinf(hit_theta) * cosf(hit_phi);
