@@ -87,7 +87,7 @@ vec3f PrincipledBRDF::sample(float ci, float co, float th, float td, float ph, f
 
 	//add them together, interpolating between dielectric and metallic
 	r_specular = lerp(Fi_spec + Fg_spec, F_m, metallic) * D_spec * G_spec;
-	r_clearcoat = F_cc * D_cc * G_cc;
+	r_clearcoat = F_cc * D_cc * G_cc * clearcoat * 0.25f;
 
 	return r_diffuse + r_sheen + r_specular + r_clearcoat;
 }
