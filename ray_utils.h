@@ -66,14 +66,10 @@ inline vec3f intersect_hdri(RTCRayHit * rh, float r) {
 	float c = ox * ox + oy * oy + oz * oz - r * r;
 	float disc = b * b - 4 * a * c;
 	
-	vec3f result = {0.f, 0.f, 0.f};
-	if (disc < 0) return result; //should not happen!
-
 	float sdisc = sqrtf(disc);
 	float t;
 	t = (-b - sdisc) / (2.f * a);
 	if (t < 0.f) t = (-b + sdisc) / (2.f * a);
-	if (t < 0.f) return result; //should not happen!
 
 	vec3f p = eval_ray(rh, t);
 	float theta, phi;
@@ -81,13 +77,11 @@ inline vec3f intersect_hdri(RTCRayHit * rh, float r) {
 	phi = atan2(p.x, p.y) + M_PI;
 
 	if (theta < 0.f) theta += M_PI;
-	if (theta >=  M_PI) theta -= M_PI;
-	if (phi < 0.f) phi += 2.f * M_PI;
-	if (phi >= 2.f * M_PI) phi -= 2.f * M_PI;
+	if (theta >= M_PI) theta -= M_PI;
+	if (phi < 0.f) phi += 2 * M_PI;
+	if (phi >= 2 * M_PI) phi -= 2 * M_PI;
 
-	result.x = phi / (2.f * M_PI);
-	result.y = theta / M_PI;
-	return result;
+	return {phi / (2.f * (float)M_PI), theta / (float)M_PI, 0.f};
 }
 
 #endif

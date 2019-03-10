@@ -86,9 +86,9 @@ int main(int argc, char ** argv) {
 	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
 
-	int n_aa = 16, n_diffuse = 8;
+	int n_aa = 16, n_indirect = 8;
 	if (argc > 2) n_aa = atoi(argv[2]);
-	if (argc > 3) n_diffuse = atoi(argv[3]);
+	if (argc > 3) n_indirect = atoi(argv[3]);
 
 	RTCRayHit rh;
 	RTCIntersectContext context;
@@ -130,7 +130,7 @@ int main(int argc, char ** argv) {
 
 				indirect = {0.f, 0.f, 0.f};
 
-				for (int sample = 0; sample < n_diffuse; sample++) {
+				for (int sample = 0; sample < n_indirect; sample++) {
 					light = random_dir(normal);
 					half = view + light;
 					half.normalize();
@@ -153,7 +153,7 @@ int main(int argc, char ** argv) {
 						indirect += shade * emit * cos_o;
 					}
 				}
-				indirect /= (float)n_diffuse;
+				indirect /= (float)n_indirect;
 				total += indirect * 2.f * M_PI; //pdf is 1/(2pi)
 			}
 			total /= (float)n_aa;
