@@ -94,10 +94,9 @@ int main(int argc, char ** argv) {
 	RTCIntersectContext context;
 	rtcInitIntersectContext(&context);
 
-	vec3f hit_p, hit_n, last_dir;
+	vec3f hit, view, light, normal, tangent, binormal, half;
 	int last_id, side = 0;
-	vec3f total, diffuse;
-	float cos_i;
+	vec3f total, indirect;
 
 	for (int row = 0; row < output.height; row++) {
 		for (int col = 0; col < output.width; col++) {
@@ -118,42 +117,44 @@ int main(int argc, char ** argv) {
 					continue;
 				} 
 
-				hit_p = eval_ray(&rh, rh.ray.tfar);
+				hit = eval_ray(&rh, rh.ray.tfar);
 
-				last_dir = {rh.ray.dir_x, rh.ray.dir_y, rh.ray.dir_z};
-				last_dir.normalize();
+				view = {-rh.ray.dir_x, -rh.ray.dir_y, -rh.ray.dir_z};
+				view.normalize();
 
-				hit_n = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
-				hit_n.normalize();
+				normal = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
+				normal.normalize();
 			
-				cos_i = -hit_n.dot(last_dir);	
-				side = 0; if (cos_i < 0.f) {hit_n *= -1.f; side = 1; cos_i = -cos_i;};
+				float cos_i = normal.dot(view);	
+				side = 0; if (cos_i < 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;};
 
-				diffuse = {0.f, 0.f, 0.f};
+				indirect = {0.f, 0.f, 0.f};
 
-				float cos_o, th, td, ph, pd;
 				for (int sample = 0; sample < n_diffuse; sample++) {
-					vec3f out_dir = random_dir(hit_n);
+					light = random_dir(normal);
+					half = view + light;
+					half.normalize();
 
-					cos_o = hit_n.dot(out_dir);
-					get_angles(last_dir, out_dir, hit_n, &th, &td, &ph, &pd); //TODO: optimize me!
-					vec3f pdf = brdf_objs[last_id].sample(cos_i, cos_o, th, td, ph, pd);
+					float cos_o = normal.dot(light);
+					float cos_th = normal.dot(half);
+					float cos_td = light.dot(half);
+					vec3f shade = brdf_objs[last_id].sample(cos_i, cos_o, cos_th, cos_td);
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
-					set_org(&rh, hit_p);
-					set_dir(&rh, out_dir);
+					set_org(&rh, hit);
+					set_dir(&rh, light);
 
 					rtcIntersect1(scene, &context, &rh);
 				
 					if (rh.hit.geomID == -1) {
 						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
-						diffuse += pdf * emit * cos_o;
+						indirect += shade * emit * cos_o;
 					}
 				}
-				diffuse /= (float)n_diffuse;
-				total += diffuse * 2.f * M_PI; //pdf is 1/(2pi)
+				indirect /= (float)n_diffuse;
+				total += indirect * 2.f * M_PI; //pdf is 1/(2pi)
 			}
 			total /= (float)n_aa;
 			total = total.pow(1.f / 2.2f);

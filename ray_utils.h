@@ -49,40 +49,6 @@ inline vec3f random_dir(vec3f n) {
   return out_dir;
 }
 
-inline void get_angles(vec3f in, vec3f out, vec3f n, float * th, float * td, float * ph, float * pd) {
-	vec3f h, u, v;
-	in = in * -1.f;
-	h = (in + out);
-	h.normalize();
-	u = local_u(n);
-	v = n.cross(u);
-
-	//h in n-u-v frame
-	float h_u, h_v, h_n;
-	h_u = h.dot(u);
-	h_v = h.dot(v);
-	h_n = h.dot(n);
-
-	//in in n-u-v frame
-	float i_u, i_v, i_n;
-	i_u = in.dot(u);
-	i_v = in.dot(v);
-	i_n = in.dot(n);	
-
-	vec3f h_nuv = {h_u, h_v, h_n}, i_nuv = {i_u, i_v, i_n};
-	vec3f n_nuv = {0.f, 0.f, 1.f}, v_nuv = {0.f, 1.f, 0.f};
-
-	vec3f tmp, diff;
-	tmp = rotate(i_nuv, n_nuv, -*ph);
-	diff = rotate(tmp, v_nuv, -*th);
-
-	*th = acos(h_n);
-	*ph = atan2(h_v, h_u);	
-
-	*td = acos(diff.z);
-	*pd = atan2(diff.y, diff.x);	
-}
-
 inline vec3f eval_ray(RTCRayHit * rh, float t) {
   vec3f result;
   result.x = rh->ray.org_x + t * rh->ray.dir_x;

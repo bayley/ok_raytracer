@@ -50,13 +50,23 @@ float lerp(float a, float b, float t) {
 	return a * (1.f - t) + b * t;
 }
 
-vec3f PrincipledBRDF::sample(float ci, float co, float th, float td, float ph, float pd) {
+/*
+vec3f PrincipledBRDF::sample(vec3f in, vec3f out, vec3f n) {
+	float ci, co, c_th, c_td;
+	vec3f h = in + out;
+	h.normalize();
+
+	ci = in.dot(n);
+	co = out.dot(n);
+	c_th = h.dot(n);
+	c_td = h.dot(out);
+*/
+vec3f PrincipledBRDF::sample(float ci, float co, float c_th, float c_td) {
 	vec3f zeroes = {0.f, 0.f, 0.f};
 	vec3f ones = {1.f, 1.f, 1.f};
 	vec3f r_diffuse, r_sheen, r_specular, r_clearcoat;
 
 	//diffuse
-	float c_td = cosf(td);
 	float fd90 = .5f + 2.f * c_td * c_td * roughness;
 	float fd = 1.f / M_PI * lerp(1.f, fd90, schlick_F(co)) * lerp(1.f, fd90, schlick_F(ci));
 
@@ -75,7 +85,6 @@ vec3f PrincipledBRDF::sample(float ci, float co, float th, float td, float ph, f
 	vec3f F_m = base_color * specular; //TODO: fresnel term for metals
 
 	//specular D, G
-	float c_th = cosf(th);
 	float alpha = fmaxf(roughness * roughness, 0.001f);
 	float D_spec = GTR2(alpha, c_th);
 	float G_spec = GGX(alpha, ci) * GGX(alpha, co);
