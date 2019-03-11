@@ -31,7 +31,6 @@ float GTR2(float alpha, float cos) {
 }
 
 float GGX(float alpha, float cos) {
-	if (cos < 0.f) return 0.f;
 	float a = alpha * alpha;
 	float b = cos * cos;
 	return 1.f / (cos + sqrtf(a + b - a * b));

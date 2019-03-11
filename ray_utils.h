@@ -38,17 +38,16 @@ inline vec3f random_diffuse(float * pdf, vec3f n) {
 
 	float e = randf();
 
-	float sin_theta = sqrtf(e);
 	float cos_theta = sqrtf(1.f - e);
+	float sin_theta = sqrtf(e);
 
 	float hit_phi = 2.f * M_PI * randf();
 
 	float c_u = sin_theta * cosf(hit_phi);
 	float c_v = sin_theta * sinf(hit_phi);
-	float c_n = cos_theta;
 
-	vec3f out_dir = u * c_u + v * c_v + n * c_n;
-	*pdf = c_n / M_PI;
+	vec3f out_dir = u * c_u + v * c_v + n * cos_theta;
+	*pdf = cos_theta / M_PI;
 
   return out_dir;
 }
@@ -61,19 +60,20 @@ inline vec3f random_specular(float * pdf, float roughness, vec3f view, vec3f n) 
 	float a2 = alpha * alpha;
 	float e = randf();
 
-	float cos_theta = sqrtf((1.f - e) / (1 + (a2 - 1.f) * e));
-	float sin_theta = sqrtf(1.f - cos_theta * cos_theta);
+	float cos_theta_h = sqrtf((1.f - e) / (1 + (a2 - 1.f) * e));
+	float sin_theta_h = sqrtf(1.f - cos_theta_h * cos_theta_h);
 	
 	float hit_phi = 2.f * M_PI * randf();
 
-  float c_u = sin_theta * cosf(hit_phi);
-  float c_v = sin_theta * sinf(hit_phi);
+  float c_u = sin_theta_h * cosf(hit_phi);
+  float c_v = sin_theta_h * sinf(hit_phi);
 
-	vec3f half = u * c_u + v * c_v + n * cos_theta;
+	vec3f half = u * c_u + v * c_v + n * cos_theta_h;
 	vec3f out_dir = half * 2.f * view.dot(half) - view;
 
-	float t = 1.f + (a2 - 1.f) * cos_theta * cos_theta;
-	*pdf = a2 / M_PI * 1.f / (t * t) * cos_theta / (4.f * out_dir.dot(half));
+	float t = 1.f + (a2 - 1.f) * cos_theta_h * cos_theta_h;
+	*pdf = a2 / M_PI * 1.f / (t * t) * cos_theta_h / (4.f * out_dir.dot(half));
+
   return out_dir;
 }
 

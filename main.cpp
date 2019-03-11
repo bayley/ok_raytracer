@@ -72,9 +72,9 @@ int main(int argc, char ** argv) {
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 0.0f;
+	brdf_objs[0].clearcoat = 8.0f;
 	brdf_objs[0].clearcoatgloss = 0.0f;
-	brdf_objs[0].base_color = {0.0f, 0.0f, 0.0f};
+	brdf_objs[0].base_color = {1.0f, 1.0f, 1.0f};
 
 	rtcCommitScene(scene);
 
@@ -137,7 +137,7 @@ int main(int argc, char ** argv) {
 					float r_specular = 0.5f + 0.5f * brdf_objs[last_id].metallic;
 					float r_diffuse = 1.f - r_specular; //redundant, but will be convenient when there are more components
 
-					if (roulette < r_specular) {
+					if (roulette <= r_specular) {
 						light = random_specular(&pdf, brdf_objs[last_id].roughness, view, normal); //specular
 					} else if (roulette < r_specular + r_diffuse) {
 						light = random_diffuse(&pdf, normal); //diffuse
@@ -146,6 +146,8 @@ int main(int argc, char ** argv) {
 					half.normalize();
 
 					float cos_o = normal.dot(light);
+					if (cos_o < 0.f) continue; //specular sampler sometimes returns a wrong-way ray
+
 					float cos_th = normal.dot(half);
 					float cos_td = light.dot(half);
 				
