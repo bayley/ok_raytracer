@@ -77,7 +77,7 @@ vec3f PrincipledBRDF::sample_diffuse(float ci, float co, float c_th, float c_td)
 
 vec3f PrincipledBRDF::sample_specular(float ci, float co, float c_th, float c_td) {
 	vec3f ones = {1.f, 1.f, 1.f};
-	vec3f r_specular, r_clearcoat;
+	vec3f r_specular, r_clearcoat = {0.f, 0.f, 0.f};
 
 	float F_c_td = schlick_F(c_td);
 
@@ -92,13 +92,15 @@ vec3f PrincipledBRDF::sample_specular(float ci, float co, float c_th, float c_td
 	float G_spec = GGX(alpha, ci) * GGX(alpha, co);
 
 	//clearcoat
-	vec3f F_cc = ones * lerp(.04f, 1.f, F_c_td);
-	float D_cc = GTR1(lerp(.1f, 0.001f, clearcoatgloss), c_th);
-	float G_cc = GGX(.25f, ci) * GGX(.25f, co);
+	if (clearcoat > 0.f) {
+		vec3f F_cc = ones * lerp(.04f, 1.f, F_c_td);
+		float D_cc = GTR1(lerp(.1f, 0.001f, clearcoatgloss), c_th);
+		float G_cc = GGX(.25f, ci) * GGX(.25f, co);
+		r_clearcoat = F_cc * D_cc * G_cc * clearcoat * 0.25f;
+	}
 
 	//add them together, interpolating between dielectric and metallic
 	r_specular = lerp(Fi_spec + Fg_spec, F_m, metallic) * D_spec * G_spec;
-	r_clearcoat = F_cc * D_cc * G_cc * clearcoat * 0.25f;
 
 	return r_specular + r_clearcoat;
 }

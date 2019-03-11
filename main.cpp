@@ -65,10 +65,10 @@ int main(int argc, char ** argv) {
 	}
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 1.0f;
-	brdf_objs[0].specular = 1.0f;
+	brdf_objs[0].metallic = 0.0f;
+	brdf_objs[0].specular = 0.5f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.5f;
+	brdf_objs[0].roughness = 0.7f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
@@ -133,10 +133,13 @@ int main(int argc, char ** argv) {
 				for (int sample = 0; sample < n_indirect; sample++) {
 					float roulette = randf();
 				
-					float pdf;	
-					if (roulette < 0.5f + 0.5f * brdf_objs[last_id].metallic) {
+					float pdf;
+					float r_specular = 0.5f + 0.5f * brdf_objs[last_id].metallic;
+					float r_diffuse = 1.f - r_specular; //redundant, but will be convenient when there are more components
+
+					if (roulette < r_specular) {
 						light = random_specular(&pdf, brdf_objs[last_id].roughness, view, normal); //specular
-					} else {
+					} else if (roulette < r_specular + r_diffuse) {
 						light = random_diffuse(&pdf, normal); //diffuse
 					}
 					half = view + light;
@@ -147,10 +150,10 @@ int main(int argc, char ** argv) {
 					float cos_td = light.dot(half);
 				
 					vec3f shade; 
-					if (roulette < 0.5f + 0.5f * brdf_objs[last_id].metallic) {	
-						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / (0.5f + 0.5 * brdf_objs[last_id].metallic);
-					} else {
-						shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / (0.5f - 0.5 * brdf_objs[last_id].metallic);	
+					if (roulette < r_specular) {
+						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
+					} else if (roulette < r_specular + r_diffuse) {
+						shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
 					}
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
