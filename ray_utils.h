@@ -37,12 +37,15 @@ inline vec3f random_diffuse(float * pdf, vec3f n) {
   vec3f v = n.cross(u);
 
 	float e = randf();
-	float r = sqrtf(e);
+
+	float sin_theta = sqrtf(e);
+	float cos_theta = sqrtf(1.f - e);
+
 	float hit_phi = 2.f * M_PI * randf();
 
-	float c_u = r * cosf(hit_phi);
-	float c_v = r * sinf(hit_phi);
-	float c_n = sqrtf(1.f - e);
+	float c_u = sin_theta * cosf(hit_phi);
+	float c_v = sin_theta * sinf(hit_phi);
+	float c_n = cos_theta;
 
 	vec3f out_dir = u * c_u + v * c_v + n * c_n;
 	*pdf = c_n / M_PI;

@@ -65,15 +65,15 @@ int main(int argc, char ** argv) {
 	}
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 0.0f;
+	brdf_objs[0].metallic = 1.0f;
 	brdf_objs[0].specular = 1.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.3f;
+	brdf_objs[0].roughness = 0.5f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 4.0f;
-	brdf_objs[0].clearcoatgloss = 0.9f;
+	brdf_objs[0].clearcoat = 0.0f;
+	brdf_objs[0].clearcoatgloss = 0.0f;
 	brdf_objs[0].base_color = {1.0f, 1.0f, 1.0f};
 
 	rtcCommitScene(scene);
@@ -134,7 +134,7 @@ int main(int argc, char ** argv) {
 					float roulette = randf();
 				
 					float pdf;	
-					if (roulette < 0.5f) {
+					if (roulette < 0.5f + 0.5f * brdf_objs[last_id].metallic) {
 						light = random_specular(&pdf, brdf_objs[last_id].roughness, view, normal); //specular
 					} else {
 						light = random_diffuse(&pdf, normal); //diffuse
@@ -147,10 +147,10 @@ int main(int argc, char ** argv) {
 					float cos_td = light.dot(half);
 				
 					vec3f shade; 
-					if (roulette < 0.5f) {	
-						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / 0.5f;
+					if (roulette < 0.5f + 0.5f * brdf_objs[last_id].metallic) {	
+						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / (0.5f + 0.5 * brdf_objs[last_id].metallic);
 					} else {
-						shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / 0.5f;	
+						shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / (0.5f - 0.5 * brdf_objs[last_id].metallic);	
 					}
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
