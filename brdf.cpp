@@ -50,9 +50,9 @@ float lerp(float a, float b, float t) {
 	return a * (1.f - t) + b * t;
 }
 
-vec3f PrincipledBRDF::sample(float ci, float co, float c_th, float c_td) {
+vec3f PrincipledBRDF::sample_diffuse(float ci, float co, float c_th, float c_td) {
 	vec3f ones = {1.f, 1.f, 1.f};
-	vec3f r_diffuse, r_sheen, r_specular, r_clearcoat;
+	vec3f r_diffuse, r_sheen;
 
 	float F_co, F_ci, F_c_td;
 	F_co = schlick_F(co);
@@ -71,6 +71,15 @@ vec3f PrincipledBRDF::sample(float ci, float co, float c_th, float c_td) {
 
 	//sheen
 	r_sheen = lerp(ones, base_color, sheentint) * sheen * F_c_td * (1.f - metallic);
+
+	return r_diffuse + r_sheen;
+}
+
+vec3f PrincipledBRDF::sample_specular(float ci, float co, float c_th, float c_td) {
+	vec3f ones = {1.f, 1.f, 1.f};
+	vec3f r_specular, r_clearcoat;
+
+	float F_c_td = schlick_F(c_td);
 
 	//specular F
 	vec3f Fi_spec = lerp(ones, base_color, speculartint) * specular * 0.08f; //incident
@@ -91,5 +100,5 @@ vec3f PrincipledBRDF::sample(float ci, float co, float c_th, float c_td) {
 	r_specular = lerp(Fi_spec + Fg_spec, F_m, metallic) * D_spec * G_spec;
 	r_clearcoat = F_cc * D_cc * G_cc * clearcoat * 0.25f;
 
-	return r_diffuse + r_sheen + r_specular + r_clearcoat;
+	return r_specular + r_clearcoat;
 }

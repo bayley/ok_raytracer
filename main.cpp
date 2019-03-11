@@ -65,15 +65,15 @@ int main(int argc, char ** argv) {
 	}
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 1.0f;
+	brdf_objs[0].metallic = 0.0f;
 	brdf_objs[0].specular = 1.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.5f;
+	brdf_objs[0].roughness = 0.3f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
 	brdf_objs[0].clearcoat = 4.0f;
-	brdf_objs[0].clearcoatgloss = 0.7f;
+	brdf_objs[0].clearcoatgloss = 0.9f;
 	brdf_objs[0].base_color = {1.0f, 1.0f, 1.0f};
 
 	rtcCommitScene(scene);
@@ -131,14 +131,27 @@ int main(int argc, char ** argv) {
 				indirect = {0.f, 0.f, 0.f};
 
 				for (int sample = 0; sample < n_indirect; sample++) {
-					light = random_dir(normal);
+					float roulette = randf();
+				
+					float pdf;	
+					if (roulette < 0.5f) {
+						light = random_specular(&pdf, brdf_objs[last_id].roughness, view, normal); //specular
+					} else {
+						light = random_diffuse(&pdf, normal); //diffuse
+					}
 					half = view + light;
 					half.normalize();
 
 					float cos_o = normal.dot(light);
 					float cos_th = normal.dot(half);
 					float cos_td = light.dot(half);
-					vec3f shade = brdf_objs[last_id].sample(cos_i, cos_o, cos_th, cos_td);
+				
+					vec3f shade; 
+					if (roulette < 0.5f) {	
+						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / 0.5f;
+					} else {
+						shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / 0.5f;	
+					}
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
@@ -150,11 +163,11 @@ int main(int argc, char ** argv) {
 				
 					if (rh.hit.geomID == -1) {
 						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
-						indirect += shade * emit * cos_o;
+						indirect += shade * emit * cos_o / pdf;
 					}
 				}
 				indirect /= (float)n_indirect;
-				total += indirect * 2.f * M_PI; //pdf is 1/(2pi)
+				total += indirect;
 			}
 			total /= (float)n_aa;
 			total = total.pow(1.f / 2.2f);

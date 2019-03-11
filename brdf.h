@@ -8,7 +8,8 @@ class PrincipledBRDF {
 public:
 	PrincipledBRDF();
 public:
-	vec3f sample(float ci, float co, float c_th, float c_td);
+	vec3f sample_diffuse(float ci, float co, float c_th, float c_td);
+	vec3f sample_specular(float ci, float co, float c_th, float c_td);
 public:
 	float subsurface, metallic, specular, speculartint, roughness, anisotropic, sheen, sheentint, clearcoat, clearcoatgloss;
 	vec3f base_color;
