@@ -68,13 +68,13 @@ int main(int argc, char ** argv) {
 	brdf_objs[0].metallic = 0.0f;
 	brdf_objs[0].specular = 1.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.7f;
+	brdf_objs[0].roughness = 1.0f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 8.0f;
+	brdf_objs[0].clearcoat = 0.0f;
 	brdf_objs[0].clearcoatgloss = 0.0f;
-	brdf_objs[0].base_color = {1.0f, 1.0f, 1.0f};
+	brdf_objs[0].base_color = {65.f / 255.f, 105.f / 255.f, 225.f / 255.f};
 
 	rtcCommitScene(scene);
 
@@ -126,7 +126,7 @@ int main(int argc, char ** argv) {
 				normal.normalize();
 			
 				float cos_i = normal.dot(view);	
-				side = 0; if (cos_i < 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;};
+				side = 0; if (cos_i <= 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;};
 
 				indirect = {0.f, 0.f, 0.f};
 

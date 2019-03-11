@@ -29,7 +29,8 @@ inline vec3f local_u(vec3f hit_n) {
 }
 
 inline float randf() {
-	return (float)((double)(rand()) / (double)(RAND_MAX));
+	float u = (float)((double)(rand()) / (double)(RAND_MAX));
+	return fminf(u, 1.f - FLT_EPSILON);
 }
 
 inline vec3f random_diffuse(float * pdf, vec3f n) {
