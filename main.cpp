@@ -68,7 +68,7 @@ int main(int argc, char ** argv) {
 	brdf_objs[0].metallic = 0.0f;
 	brdf_objs[0].specular = 1.0f;
 	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 1.0f;
+	brdf_objs[0].roughness = 0.3f;
 	brdf_objs[0].anisotropic = 0.f;
 	brdf_objs[0].sheen = 0.f;
 	brdf_objs[0].sheentint = 0.f;
@@ -86,9 +86,8 @@ int main(int argc, char ** argv) {
 	cam.zoom(1.2f);
 	cam.resize(output.width, output.height);
 
-	int n_aa = 16, n_indirect = 8;
-	if (argc > 2) n_aa = atoi(argv[2]);
-	if (argc > 3) n_indirect = atoi(argv[3]);
+	int n_samples = 16;
+	if (argc > 2) n_samples = atoi(argv[2]);
 
 	RTCRayHit rh;
 	RTCIntersectContext context;
@@ -96,13 +95,12 @@ int main(int argc, char ** argv) {
 
 	vec3f hit, view, light, normal, tangent, binormal, half;
 	int last_id, side = 0;
-	vec3f total, indirect;
+	vec3f total, lighting;
 
 	for (int row = 0; row < output.height; row++) {
 		for (int col = 0; col < output.width; col++) {
 			total = {0.f, 0.f, 0.f};
-			
-			for (int aa = 0; aa < n_aa; aa++) {
+			for (int aa = 0; aa < 16; aa++) {
 				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
@@ -113,7 +111,7 @@ int main(int argc, char ** argv) {
 				last_id = rh.hit.geomID;
 
 				if (last_id == -1) {
-					total += sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
+					total += sample_hdri(&rh, hdri_w, hdri_h, 25.f);
 					continue;
 				} 
 
@@ -128,15 +126,14 @@ int main(int argc, char ** argv) {
 				float cos_i = normal.dot(view);	
 				side = 0; if (cos_i <= 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;};
 
-				indirect = {0.f, 0.f, 0.f};
-
-				for (int sample = 0; sample < n_indirect; sample++) {
+				lighting = {0.f, 0.f, 0.f};
+				for (int sample = 0; sample < n_samples; sample++) {	
 					float roulette = randf();
-				
+			
 					float pdf;
 					float r_specular = 0.5f + 0.5f * brdf_objs[last_id].metallic;
 					float r_diffuse = 1.f - r_specular; //redundant, but will be convenient when there are more components
-
+	
 					if (roulette <= r_specular) {
 						light = random_specular(&pdf, brdf_objs[last_id].roughness, view, normal); //specular
 					} else if (roulette < r_specular + r_diffuse) {
@@ -144,10 +141,12 @@ int main(int argc, char ** argv) {
 					}
 					half = view + light;
 					half.normalize();
-
+	
 					float cos_o = normal.dot(light);
-					if (cos_o < 0.f) continue; //specular sampler sometimes returns a wrong-way ray
-
+					if (cos_o < 0.f) {
+						continue; //specular sampler sometimes returns a wrong-way ray
+					}
+	
 					float cos_th = normal.dot(half);
 					float cos_td = light.dot(half);
 				
@@ -155,26 +154,26 @@ int main(int argc, char ** argv) {
 					if (roulette < r_specular) {
 						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
 					} else if (roulette < r_specular + r_diffuse) {
-						shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
+							shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
 					}
 				
 					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
-
+	
 					set_org(&rh, hit);
 					set_dir(&rh, light);
-
+	
 					rtcIntersect1(scene, &context, &rh);
 				
 					if (rh.hit.geomID == -1) {
 						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
-						indirect += shade * emit * cos_o / pdf;
-					}
+						lighting += shade * emit * cos_o / pdf;
+					} 
 				}
-				indirect /= (float)n_indirect;
-				total += indirect;
+				lighting /= n_samples;
+				total += lighting;
 			}
-			total /= (float)n_aa;
+			total /= 16.f;
 			total = total.pow(1.f / 2.2f);
 			output.set_px(row, col, total.x, total.y, total.z);
 		}
