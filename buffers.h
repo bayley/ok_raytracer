@@ -7,6 +7,7 @@ class FBuffer {
 public:
 	FBuffer();
 	FBuffer(int w, int h);
+	~FBuffer() {free(data);}
 public:
 	void initialize(int w, int h);
 public:
@@ -22,6 +23,7 @@ class IBuffer {
 public:
 	IBuffer();
 	IBuffer(int w, int h);
+	~IBuffer() {free(data);}
 public:
 	void initialize(int w, int h);
 public:
@@ -37,6 +39,7 @@ class VBuffer {
 public:
 	VBuffer();
 	VBuffer(int w, int h);
+	~VBuffer() {free(data);}
 public:
 	void initialize(int w, int h);
 public:

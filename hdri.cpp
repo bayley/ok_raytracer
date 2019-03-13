@@ -54,7 +54,7 @@ RenderBuffer::RenderBuffer(int w, int h) {
 }
 
 void RenderBuffer::add(int row, int col, vec3f value, int count) {
-	total[row][col] += value;
+	total[row][col] += value * count;
 	ssq[row][col] += value * value * (float)count;
 	depth[row][col] += count;
 	average[row][col] = total[row][col] / (float)depth[row][col];
