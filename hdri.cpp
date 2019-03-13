@@ -16,13 +16,13 @@ HDRI::HDRI(int w, int h, bool v) {
 	if (track_variance) {
 		_var = (vec3f *) malloc(width * height * sizeof(vec3f));
 		_avg = (vec3f *) malloc(width * height * sizeof(vec3f));
-		_m2 = (vec3f *) malloc(width * height * sizeof(vec3f));
+		_ssq = (vec3f *) malloc(width * height * sizeof(vec3f));
 		_depth = (int*)malloc(width * height * sizeof(int));
 
 		for (int i = 0; i < width * height; i++) {
 			_var[i] = {0.f, 0.f, 0.f};
 			_avg[i] = {0.f, 0.f, 0.f};
-			_m2[i] = {0.f, 0.f, 0.f};
+			_ssq[i] = {0.f, 0.f, 0.f};
 			_depth[i] = 0;
 		}
 	}
@@ -47,7 +47,7 @@ int HDRI::load(char * fname) {
   return 1;
 }
 
-int HDRI::write_buffer(vec3f * buf, char * fname, bool gamma) {
+int HDRI::write_buffer(vec3f * buf, char * fname, bool gamma, float scale) {
 	unsigned char *red, *green, *blue;
 
   red = (unsigned char *)malloc(width * height);
@@ -55,7 +55,7 @@ int HDRI::write_buffer(vec3f * buf, char * fname, bool gamma) {
   blue = (unsigned char *)malloc(width * height);
 
 	for (int i = 0; i < width * height; i++) {
-		vec3f px = buf[i];
+		vec3f px = buf[i] * scale;
 		if (gamma) px = px.pow(1.f / 2.2f);
 		px *= 256.f;
 
@@ -69,8 +69,8 @@ int HDRI::write_buffer(vec3f * buf, char * fname, bool gamma) {
 	}	
 
 	write_bmp(red, green, blue, width, height, fname);
-
 	free(red); free(green); free(blue);
+
 	return 1;
 }
 
@@ -83,27 +83,26 @@ int HDRI::write_avg(char * fname) {
 	return write_buffer(_avg, fname, true);
 }
 
-int HDRI::write_var(char * fname) {
+int HDRI::write_var(char * fname, float scale) {
 	if (!track_variance) return -1;
-	return write_buffer(_var, fname, false);
+	return write_buffer(_var, fname, false, scale);
 }
 
 void HDRI::set(int row, int col, vec3f value) {
 	_buf[row * width + col] = value;
 }
 
-void HDRI::add(int row, int col, vec3f value) {
-	int index = row * width + col;
-	_buf[index] += value;
+void HDRI::add(int row, int col, vec3f value, int k) {
+	int i = row * width + col;
 
-	if (track_variance) {
-		_depth[index]++;
-		vec3f delta = value - _avg[index];
-		_avg[index] += delta / (float)_depth[index];
-		vec3f delta2 = value - _avg[index];
-		_m2[index] += delta * delta2;
+	_buf[i] += value * (float)k;
 	
-		_var[index] = _m2[index] / (float)_depth[index];
+	if (track_variance) {
+		_ssq[i] += value * value * (float)k;
+		_depth[i] += k;
+
+		_avg[i] = _buf[i] / (float)_depth[i];
+		_var[i] = (_ssq[i] - _buf[i] * _buf[i] / (float)_depth[i]) / (float)_depth[i];	
 	}
 }
 

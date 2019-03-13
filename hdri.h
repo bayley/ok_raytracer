@@ -10,10 +10,10 @@ public:
 	int load(char * fname);
 	int write(char * fname);
 	int write_avg(char * fname);
-	int write_var(char * fname);
+	int write_var(char * fname, float scale=1.f);
 public:
 	void set(int row, int col, vec3f value);
-	void add(int row, int col, vec3f value);
+	void add(int row, int col, vec3f value, int k=1);
 public:
 	vec3f at(int row, int col);	
 	vec3f var(int row, int col);
@@ -22,9 +22,9 @@ public:
 public:
 	int width, height;
 private:
-	int write_buffer(vec3f * buf, char * fname, bool gamma);
+	int write_buffer(vec3f * buf, char * fname, bool gamma, float scale=1.f);
 private:
-	vec3f *_buf, *_var, *_avg, *_m2;
+	vec3f *_buf, *_var, *_avg, *_ssq;
 	int * _depth;
 	bool track_variance;
 };
