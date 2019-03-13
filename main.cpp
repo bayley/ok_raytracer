@@ -10,7 +10,6 @@
 #include "ray_utils.h"
 #include "hdri.h"
 #include "brdf.h"
-#include "adaptive.h"
 
 PrincipledBRDF brdf_objs[64];
 HDRI * backdrop;
@@ -22,7 +21,7 @@ vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   return backdrop->at(row, col);
 }
 
-void render_pass(RTCScene scene, Camera * cam, HDRI * output, int * count) {
+void render_pass(RTCScene scene, Camera * cam, HDRI * output, int n_samples) {
   RTCRayHit rh;
   RTCIntersectContext context;
   rtcInitIntersectContext(&context);
@@ -31,9 +30,6 @@ void render_pass(RTCScene scene, Camera * cam, HDRI * output, int * count) {
 	int id, side = 0;
 	for (int row = 0; row < output->height; row++) {
 		for (int col = 0; col < output->width; col++) {
-			int n_samples = count[row * output->width + col];
-			if (n_samples == 0) continue;
-
 			rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 			rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
@@ -121,6 +117,8 @@ int main(int argc, char** argv) {
   if (argc > 2) n_aa = atoi(argv[2]);
 	if (argc > 3) n_passes = atoi(argv[3]);
 
+	printf("Rendering image with %d geometry rays and %d lighting ray(s)\n", n_aa, 1 << (n_passes - 1));
+
   srand(time(0));
 	setbuf(stdout, NULL);
 
@@ -151,7 +149,7 @@ int main(int argc, char** argv) {
   brdf_objs[0].clearcoatgloss = 0.0f;
   brdf_objs[0].base_color = {65.f / 255.f, 105.f / 255.f, 225.f / 255.f};
 
-	printf("Creating BVH...\n");
+	printf("Building BVH...\n");
 	rtcCommitScene(scene);
 
 	/*----set up camera----*/
@@ -163,13 +161,11 @@ int main(int argc, char** argv) {
   cam.zoom(1.2f);
   cam.resize(output.width, output.height);
 
-	/*----initialize adaptive sampling----*/
-	printf("Initializing adaptive sampler with %d samples: ", n_aa);
-	int * sample_counts = (int*)malloc(output.width * output.height * sizeof(int));
-	for (int i = 0; i < output.width * output.height; i++) sample_counts[i] = 1;
+	/*----first pass----*/
+	printf("Prepass: ");
 	for (int aa = 0; aa < n_aa; aa++) {
+		render_pass(scene, &cam, &output, 1);
 		printf("*");
-		render_pass(scene, &cam, &output, sample_counts);
 	}
 	printf("\n");
 
@@ -178,8 +174,7 @@ int main(int argc, char** argv) {
 	for (int aa = 0; aa < n_aa; aa++) {
 		int n_samples = 1;
 		for (int pass = 0; pass < n_passes; pass++) {
-			adapt_counts(&output, sample_counts, n_samples);
-			render_pass(scene, &cam, &output, sample_counts);
+			render_pass(scene, &cam, &output, n_samples);
 			n_samples += n_samples;
 		}
 		printf("*");
@@ -188,6 +183,5 @@ int main(int argc, char** argv) {
 
 	/*----write output----*/
 	output.write_avg((char*)"out.bmp");
-	output.write_var((char*)"variance.bmp", 8.f);
 }
 

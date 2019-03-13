@@ -88,10 +88,6 @@ int HDRI::write_var(char * fname, float scale) {
 	return write_buffer(_var, fname, false, scale);
 }
 
-void HDRI::set(int row, int col, vec3f value) {
-	_buf[row * width + col] = value;
-}
-
 void HDRI::add(int row, int col, vec3f value, int k) {
 	int i = row * width + col;
 

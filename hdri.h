@@ -12,7 +12,6 @@ public:
 	int write_avg(char * fname);
 	int write_var(char * fname, float scale=1.f);
 public:
-	void set(int row, int col, vec3f value);
 	void add(int row, int col, vec3f value, int k=1);
 public:
 	vec3f at(int row, int col);	
