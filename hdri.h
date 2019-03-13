@@ -1,4 +1,4 @@
-#ifndef __HRDI_H
+#ifndef __HDRI_H
 #define __HDRI_H
 
 #include "geom.h"

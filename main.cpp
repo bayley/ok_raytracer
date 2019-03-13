@@ -10,6 +10,7 @@
 #include "ray_utils.h"
 #include "hdri.h"
 #include "brdf.h"
+#include "adaptive.h"
 
 PrincipledBRDF brdf_objs[64];
 HDRI * backdrop;
@@ -31,6 +32,7 @@ void render_pass(RTCScene scene, Camera * cam, HDRI * output, int * count) {
 	for (int row = 0; row < output->height; row++) {
 		for (int col = 0; col < output->width; col++) {
 			int n_samples = count[row * output->width + col];
+			if (n_samples == 0) continue;
 
 			rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 			rh.hit.instID[0] = -1; rh.hit.geomID = -1;
@@ -108,26 +110,6 @@ void render_pass(RTCScene scene, Camera * cam, HDRI * output, int * count) {
 	}
 }
 
-void adapt_counts(HDRI * output, int * counts, int avg) {
-	int w = output->width, h = output->height;
-	float var_avg = 0.f;
-	vec3f v;
-	for (int row = 0; row < h; row++) {
-		for (int col = 0; col < w; col++) {
-			v = output->var(row, col);
-			var_avg += fminf(3.f, v.x + v.y + v.z);
-		}
-	}
-	var_avg /= (float)(w * h);
-
-	for (int row = 0; row < h; row++) {
-		for (int col = 0; col < w; col++) {
-			v = output->var(row, col);
-			counts[row * w + col] = (int)((float)(avg) * fminf(3.f, v.x + v.y + v.z) / var_avg);
-		}
-	}
-}
-
 int main(int argc, char** argv) {
 	/*----parse arguments, setup----*/
   if (argc < 2) {
@@ -161,7 +143,7 @@ int main(int argc, char** argv) {
   brdf_objs[0].metallic = 0.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 1.0f;
+  brdf_objs[0].roughness = 0.3f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
