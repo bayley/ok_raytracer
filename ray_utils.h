@@ -86,7 +86,7 @@ inline vec3f eval_ray(RTCRayHit * rh, float t) {
   return result;
 }
 
-inline vec3f intersect_hdri(RTCRayHit * rh, float r) {
+inline vec3f intersect_backdrop(RTCRayHit * rh, float r) {
 	float ox = rh->ray.org_x; float oy = rh->ray.org_y; float oz = rh->ray.org_z;
 	float dx = rh->ray.dir_x; float dy = rh->ray.dir_y; float dz = rh->ray.dir_z;
 

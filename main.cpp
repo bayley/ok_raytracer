@@ -8,179 +8,159 @@
 #include "obj_loader.h"
 #include "geom.h"
 #include "ray_utils.h"
-#include "bmp.h"
-#include "bmpc.h"
+#include "hdri.h"
 #include "brdf.h"
 
 PrincipledBRDF brdf_objs[64];
-vec3f * hdri;
+HDRI * backdrop;
 
-vec3f sample_hdri(RTCRayHit * rh, int w, int h, float radius) {
-	vec3f uv = intersect_hdri(rh, 25.f);
-	int u = (int)(w * uv.x);
-	int v = (int)(h * uv.y);
-	return hdri[v * w + u];
+vec3f sample_backdrop(RTCRayHit * rh, float radius) {
+  vec3f uv = intersect_backdrop(rh, radius);
+  int row = (int)(backdrop->height * uv.y);
+  int col = (int)(backdrop->width * uv.x);
+  return backdrop->at(row, col);
 }
 
-int load_hdri(char * fname, int hdri_w, int hdri_h) {
-	unsigned char *h_red, *h_green, *h_blue;
+void render_pass(RTCScene scene, Camera * cam, int n_samples, HDRI * output) {
+  RTCRayHit rh;
+  RTCIntersectContext context;
+  rtcInitIntersectContext(&context);
 
-	h_red = (unsigned char *)malloc(hdri_h * hdri_w);
-	h_green = (unsigned char *)malloc(hdri_h * hdri_w);
-	h_blue = (unsigned char *)malloc(hdri_h * hdri_w);
-	hdri = (vec3f *)malloc(hdri_h * hdri_w * sizeof(vec3f));
+	vec3f hit, view, light, normal, half;
+	int id, side = 0;
+	for (int row = 0; row < output->height; row++) {
+		for (int col = 0; col < output->width; col++) {
+			rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
+			rh.hit.instID[0] = -1; rh.hit.geomID = -1;
 
-	if (read_bmp(h_red, h_green, h_blue, hdri_w, hdri_h, fname) < 0) return -1;
+			set_org(&rh, cam->eye);
+			set_dir(&rh, cam->lookat((float)col + randf(), (float)row + randf()));
 
-	for (int i = 0; i < hdri_w * hdri_h; i++) {
-		hdri[i] = {(float)h_red[i], (float)h_green[i], (float)h_blue[i]};
-		hdri[i] /= 255.f;
-		hdri[i] = hdri[i].pow(2.2f);
+			rtcIntersect1(scene, &context, &rh);	
+			id = rh.hit.geomID;
+
+			if (id == -1) {
+				output->add(row, col, sample_backdrop(&rh, 25.f));
+				continue;
+			}
+
+			hit = eval_ray(&rh, rh.ray.tfar);
+			view = {-rh.ray.dir_x, -rh.ray.dir_y, -rh.ray.dir_z};
+			normal = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
+			
+			view.normalize(); normal.normalize();
+			
+			float cos_i = normal.dot(view);
+			side = 0; if (cos_i < 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;}
+
+			for (int sample = 0; sample < n_samples; sample++) {
+				float roulette = randf();
+	
+				float pdf;
+				float r_specular = 0.5f + 0.5f * brdf_objs[id].metallic;
+				float r_diffuse = 1.f - r_specular;
+				
+				if (roulette < r_specular) {
+					light = random_specular(&pdf, brdf_objs[id].roughness, view, normal);
+				} else if (roulette < r_specular + r_diffuse) {
+					light = random_diffuse(&pdf, normal);
+				}
+				half = view + light;
+				half.normalize();
+
+				float cos_o = normal.dot(light);
+				if (cos_o < 0.f) {
+					output->add(row, col, {0.f, 0.f, 0.f});
+					continue;
+				}
+
+				float cos_th = normal.dot(half);
+				float cos_td = light.dot(half);
+
+				vec3f shade;
+				if (roulette < r_specular) {
+					shade = brdf_objs[id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
+				} else if (roulette < r_specular + r_diffuse) {
+					shade = brdf_objs[id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
+				}
+
+				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
+				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
+
+				set_org(&rh, hit);
+				set_dir(&rh, light);
+			
+				rtcIntersect1(scene, &context, &rh);
+
+				if (rh.hit.geomID == -1) {
+					vec3f emit = sample_backdrop(&rh, 25.f);
+					output->add(row, col, shade * emit * cos_o / pdf);
+				} else {
+					output->add(row, col, {0.f, 0.f, 0.f});
+				}
+			}
+		}
 	}
-
-	free(h_red); free(h_green); free(h_blue);
-	return 1;
 }
 
-int main(int argc, char ** argv) {
-	if (argc < 2) {
-		printf("Usage: embree_test <filename> [n_aa] [n_diffuse]\n");
-		return -1;
-	}
+int main(int argc, char** argv) {
+	/*----parse arguments, setup----*/
+  if (argc < 2) {
+    printf("Usage: embree_test <filename> [n_aa] [n_diffuse]\n");
+    return -1;
+  }
 
-	srand(time(0));
+	int n_aa = 1, n_passes = 1;
+  if (argc > 2) n_aa = atoi(argv[2]);
+	if (argc > 3) n_passes = atoi(argv[3]);
 
-	RTCDevice device = rtcNewDevice("");
-	RTCScene scene = rtcNewScene(device);
+  srand(time(0));
 
-	int hdri_w = 2048, hdri_h = 1024;
-	if (load_hdri((char*)"textures/studio.bmp", hdri_w, hdri_h) < 0) {
-		printf("HDRI not found\n");
+	/*----load scene----*/
+  RTCDevice device = rtcNewDevice("");
+  RTCScene scene = rtcNewScene(device);
+
+	backdrop = new HDRI(2048, 1024);
+	if (backdrop->load((char*)"textures/studio.bmp") < 0) {
+		printf("Backdrop not found\n");
 		return -1;
 	}
 
 	if (load_obj(device, scene, argv[1], 0) < 0) {
-		printf("%s not found\n", argv[1]);
-		return -1;
-	}
+    printf("%s not found\n", argv[1]);
+    return -1;
+  }
 
 	brdf_objs[0].subsurface = 0.f;
-	brdf_objs[0].metallic = 0.0f;
-	brdf_objs[0].specular = 1.0f;
-	brdf_objs[0].speculartint = 0.f;
-	brdf_objs[0].roughness = 0.3f;
-	brdf_objs[0].anisotropic = 0.f;
-	brdf_objs[0].sheen = 0.f;
-	brdf_objs[0].sheentint = 0.f;
-	brdf_objs[0].clearcoat = 0.0f;
-	brdf_objs[0].clearcoatgloss = 0.0f;
-	brdf_objs[0].base_color = {65.f / 255.f, 105.f / 255.f, 225.f / 255.f};
+  brdf_objs[0].metallic = 0.0f;
+  brdf_objs[0].specular = 1.0f;
+  brdf_objs[0].speculartint = 0.f;
+  brdf_objs[0].roughness = 0.3f;
+  brdf_objs[0].anisotropic = 0.f;
+  brdf_objs[0].sheen = 0.f;
+  brdf_objs[0].sheentint = 0.f;
+  brdf_objs[0].clearcoat = 0.0f;
+  brdf_objs[0].clearcoatgloss = 0.0f;
+  brdf_objs[0].base_color = {65.f / 255.f, 105.f / 255.f, 225.f / 255.f};
 
 	rtcCommitScene(scene);
 
-	BMPC output(1920, 1080);
+	/*----set up camera----*/
+  HDRI output(1920, 1080, true);
 
-	Camera cam;
-	cam.move(5.f, 8.f, 2.f);
-	cam.point(-1.f, -1.5f, 0.f);
-	cam.zoom(1.2f);
-	cam.resize(output.width, output.height);
+  Camera cam;
+  cam.move(5.f, 8.f, 2.f);
+  cam.point(-1.f, -1.5f, 0.f);
+  cam.zoom(1.2f);
+  cam.resize(output.width, output.height);
 
-	int n_samples = 16;
-	if (argc > 2) n_samples = atoi(argv[2]);
-
-	RTCRayHit rh;
-	RTCIntersectContext context;
-	rtcInitIntersectContext(&context);
-
-	vec3f hit, view, light, normal, tangent, binormal, half;
-	int last_id, side = 0;
-	vec3f total, lighting;
-
-	for (int row = 0; row < output.height; row++) {
-		for (int col = 0; col < output.width; col++) {
-			total = {0.f, 0.f, 0.f};
-			for (int aa = 0; aa < 16; aa++) {
-				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
-				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
-
-				set_org(&rh, cam.eye);
-				set_dir(&rh, cam.lookat((float)col + randf(), (float)row + randf()));
-
-				rtcIntersect1(scene, &context, &rh);
-				last_id = rh.hit.geomID;
-
-				if (last_id == -1) {
-					total += sample_hdri(&rh, hdri_w, hdri_h, 25.f);
-					continue;
-				} 
-
-				hit = eval_ray(&rh, rh.ray.tfar);
-
-				view = {-rh.ray.dir_x, -rh.ray.dir_y, -rh.ray.dir_z};
-				view.normalize();
-
-				normal = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
-				normal.normalize();
-			
-				float cos_i = normal.dot(view);	
-				side = 0; if (cos_i <= 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;};
-
-				lighting = {0.f, 0.f, 0.f};
-				for (int sample = 0; sample < n_samples; sample++) {	
-					float roulette = randf();
-			
-					float pdf;
-					float r_specular = 0.5f + 0.5f * brdf_objs[last_id].metallic;
-					float r_diffuse = 1.f - r_specular; //redundant, but will be convenient when there are more components
-	
-					if (roulette <= r_specular) {
-						light = random_specular(&pdf, brdf_objs[last_id].roughness, view, normal); //specular
-					} else if (roulette < r_specular + r_diffuse) {
-						light = random_diffuse(&pdf, normal); //diffuse
-					}
-					half = view + light;
-					half.normalize();
-	
-					float cos_o = normal.dot(light);
-					if (cos_o < 0.f) {
-						continue; //specular sampler sometimes returns a wrong-way ray
-					}
-	
-					float cos_th = normal.dot(half);
-					float cos_td = light.dot(half);
-				
-					vec3f shade; 
-					if (roulette < r_specular) {
-						shade = brdf_objs[last_id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
-					} else if (roulette < r_specular + r_diffuse) {
-							shade = brdf_objs[last_id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
-					}
-				
-					rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
-					rh.hit.instID[0] = -1; rh.hit.geomID = -1;
-	
-					set_org(&rh, hit);
-					set_dir(&rh, light);
-	
-					rtcIntersect1(scene, &context, &rh);
-				
-					if (rh.hit.geomID == -1) {
-						vec3f emit = sample_hdri(&rh, hdri_w, hdri_h, 25.f); //TODO: optimize me!
-						lighting += shade * emit * cos_o / pdf;
-					} 
-				}
-				lighting /= n_samples;
-				total += lighting;
-			}
-			total /= 16.f;
-			total = total.pow(1.f / 2.2f);
-			output.set_px(row, col, total.x, total.y, total.z);
-		}
+	/*----render----*/
+	for (int aa = 0; aa < n_aa; aa++) {
+		render_pass(scene, &cam, 256, &output);
 	}
 
-	output.write((char*)"out.bmp");
-
-	rtcReleaseScene(scene);
-	rtcReleaseDevice(device);
+	/*----write output----*/
+	output.write_avg((char*)"out.bmp");
+	output.write_var((char*)"variance.bmp");
 }
+
