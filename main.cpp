@@ -10,18 +10,19 @@
 #include "ray_utils.h"
 #include "hdri.h"
 #include "brdf.h"
+#include "buffers.h"
 
 PrincipledBRDF brdf_objs[64];
-HDRI * backdrop;
+HDRI backdrop;
 
 vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   vec3f uv = intersect_backdrop(rh, radius);
-  int row = (int)(backdrop->height * uv.y);
-  int col = (int)(backdrop->width * uv.x);
-  return backdrop->at(row, col);
+  int row = (int)(backdrop.height * uv.y);
+  int col = (int)(backdrop.width * uv.x);
+  return backdrop[row][col];
 }
 
-void render_pass(RTCScene scene, Camera * cam, HDRI * output, int n_samples) {
+void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, int n_samples) {
   RTCRayHit rh;
   RTCIntersectContext context;
   rtcInitIntersectContext(&context);
@@ -107,6 +108,7 @@ void render_pass(RTCScene scene, Camera * cam, HDRI * output, int n_samples) {
 }
 
 int main(int argc, char** argv) {
+	/*----test code goes here----*/
 	/*----parse arguments, setup----*/
   if (argc < 2) {
     printf("Usage: embree_test <filename> [n_aa] [n_samples]\n");
@@ -117,7 +119,7 @@ int main(int argc, char** argv) {
   if (argc > 2) n_aa = atoi(argv[2]);
 	if (argc > 3) n_passes = atoi(argv[3]);
 
-	printf("Rendering image with %d geometry rays and %d lighting ray(s)\n", n_aa, 1 << (n_passes - 1));
+	printf("Rendering image with %d geometry rays and %d lighting ray(s)\n", n_aa, 1 << n_passes);
 
   srand(time(0));
 	setbuf(stdout, NULL);
@@ -126,8 +128,8 @@ int main(int argc, char** argv) {
   RTCDevice device = rtcNewDevice("");
   RTCScene scene = rtcNewScene(device);
 
-	backdrop = new HDRI(2048, 1024);
-	if (backdrop->load((char*)"textures/studio.bmp") < 0) {
+	backdrop.initialize(2048, 1024);
+	if (backdrop.load((char*)"textures/studio.bmp") < 0) {
 		printf("Backdrop not found\n");
 		return -1;
 	}
@@ -153,13 +155,14 @@ int main(int argc, char** argv) {
 	rtcCommitScene(scene);
 
 	/*----set up camera----*/
-  HDRI output(1920, 1080, true);
+  RenderBuffer output(1920, 1080);
 
   Camera cam;
   cam.move(5.f, 8.f, 2.f);
   cam.point(-1.f, -1.5f, 0.f);
   cam.zoom(1.2f);
   cam.resize(output.width, output.height);
+	cam.resize(1920, 1080);
 
 	/*----first pass----*/
 	printf("Prepass: ");
@@ -182,6 +185,7 @@ int main(int argc, char** argv) {
 	printf("\n"); 
 
 	/*----write output----*/
-	output.write_avg((char*)"out.bmp");
+	output.average.write((char*)"out.bmp", 256.f, 2.2f);
+	output.variance.write((char*)"variance.bmp", 256.f);
 }
 

@@ -1,119 +1,62 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <stdio.h>
 
+#include "buffers.h"
+#include "geom.h"
 #include "hdri.h"
 #include "bmp.h"
-#include "geom.h"
 
-HDRI::HDRI(int w, int h, bool v) {
-	width = w;
-	height = h;
-	track_variance = v;
-	_buf = (vec3f *) malloc(width * height * sizeof(vec3f));
+typedef unsigned char u8;
 
-	for (int i = 0; i < width * height; i++) _buf[i] = {0.f, 0.f, 0.f};
-	if (track_variance) {
-		_var = (vec3f *) malloc(width * height * sizeof(vec3f));
-		_avg = (vec3f *) malloc(width * height * sizeof(vec3f));
-		_ssq = (vec3f *) malloc(width * height * sizeof(vec3f));
-		_depth = (int*)malloc(width * height * sizeof(int));
+HDRI::HDRI() {
+	width = 0; height = 0;
+}
 
-		for (int i = 0; i < width * height; i++) {
-			_var[i] = {0.f, 0.f, 0.f};
-			_avg[i] = {0.f, 0.f, 0.f};
-			_ssq[i] = {0.f, 0.f, 0.f};
-			_depth[i] = 0;
-		}
-	}
+HDRI::HDRI(int w, int h) {
+	initialize(w, h);
+}
+
+void HDRI::initialize(int w, int h) {
+	width = w; height = h;
+	data.initialize(width, height);
+}
+
+vec3f* HDRI::operator[](int row) {
+	return data[row];
 }
 
 int HDRI::load(char * fname) {
-	unsigned char *red, *green, *blue;
+	u8 *red, *green, *blue;
+	red = (u8*)malloc(width * height * sizeof(u8));
+	green = (u8*)malloc(width * height * sizeof(u8));
+	blue = (u8*)malloc(width * height * sizeof(u8));
 
-  red = (unsigned char *)malloc(width * height);
-  green = (unsigned char *)malloc(width * height);
-  blue = (unsigned char *)malloc(width * height);
+	if(read_bmp(red, green, blue, width, height, fname) < 0) return -1;
 
-  if (read_bmp(red, green, blue, width, height, fname) < 0) return -1;
-
-  for (int i = 0; i < width * height; i++) {
-    _buf[i] = {(float)red[i], (float)green[i], (float)blue[i]};
-    _buf[i] /= 255.f;
-    _buf[i] = _buf[i].pow(2.2f);
-  }
-
-  free(red); free(green); free(blue);
-  return 1;
-}
-
-int HDRI::write_buffer(vec3f * buf, char * fname, bool gamma, float scale) {
-	unsigned char *red, *green, *blue;
-
-  red = (unsigned char *)malloc(width * height);
-  green = (unsigned char *)malloc(width * height);
-  blue = (unsigned char *)malloc(width * height);
-
-	for (int i = 0; i < width * height; i++) {
-		vec3f px = buf[i] * scale;
-		if (gamma) px = px.pow(1.f / 2.2f);
-		px *= 256.f;
-
-		if (px.x > 255.f) px.x = 255.f;
-		if (px.y > 255.f) px.y = 255.f;
-		if (px.z > 255.f) px.z = 255.f;
-
-		red[i] = (unsigned char) px.x;
-		green[i] = (unsigned char) px.y;
-		blue[i] = (unsigned char) px.z;
-	}	
-
-	write_bmp(red, green, blue, width, height, fname);
-	free(red); free(green); free(blue);
+	for (int row = 0; row < height; row++) {
+		for (int col = 0; col < width; col++) {
+			data[row][col] = {(float)red[row * width + col], (float)green[row * width + col], (float)blue[row * width + col]};
+			data[row][col] /= 255.f;
+			data[row][col] = data[row][col].pow(2.2f);
+		}
+	}
 
 	return 1;
 }
 
-int HDRI::write(char * fname) {
-	return write_buffer(_buf, fname, true);
+RenderBuffer::RenderBuffer(int w, int h) {
+	width = w; height = h;
+	average.initialize(width, height);
+	variance.initialize(width, height);
+	depth.initialize(width, height);
+	total.initialize(width, height);
+	ssq.initialize(width, height);
 }
 
-int HDRI::write_avg(char * fname) {
-	if (!track_variance) return -1;
-	return write_buffer(_avg, fname, true);
-}
-
-int HDRI::write_var(char * fname, float scale) {
-	if (!track_variance) return -1;
-	return write_buffer(_var, fname, false, scale);
-}
-
-void HDRI::add(int row, int col, vec3f value, int k) {
-	int i = row * width + col;
-
-	_buf[i] += value * (float)k;
-	
-	if (track_variance) {
-		_ssq[i] += value * value * (float)k;
-		_depth[i] += k;
-
-		_avg[i] = _buf[i] / (float)_depth[i];
-		_var[i] = (_ssq[i] - _buf[i] * _buf[i] / (float)_depth[i]) / (float)_depth[i];	
-	}
-}
-
-vec3f HDRI::at(int row, int col) {
-	return _buf[row * width + col];
-}
-
-vec3f HDRI::var(int row, int col) {
-	return _var[row * width + col];
-}
-
-vec3f HDRI::avg(int row, int col) {
-	return _avg[row * width + col];
-}
-
-int HDRI::depth(int row, int col) {
-	return _depth[row * width + col];	
+void RenderBuffer::add(int row, int col, vec3f value, int count) {
+	total[row][col] += value;
+	ssq[row][col] += value * value * (float)count;
+	depth[row][col] += count;
+	average[row][col] = total[row][col] / (float)depth[row][col];
+	variance[row][col] = (ssq[row][col] - total[row][col] * total[row][col] / (float)depth[row][col]) / (float)depth[row][col];
 }
