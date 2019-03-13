@@ -23,6 +23,10 @@ vec3f vec3f::operator/(float c) {
 	return vec3f(x / c, y / c, z / c);
 }
 
+vec3f vec3f::operator/(const vec3f& u) {
+	return vec3f(x / u.x, y / u.y, z / u.z);
+}
+
 vec3f vec3f::operator+=(const vec3f& u) {
 	x += u.x; y += u.y; z += u.z;
 	return *this;

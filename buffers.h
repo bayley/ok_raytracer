@@ -14,8 +14,9 @@ public:
 	float* operator[](int row);
 public:
 	void write(char * fname, float scale);
-private:
+public:
 	int width, height;
+private:
 	float * data;
 };
 
@@ -30,8 +31,9 @@ public:
 	int* operator[](int row);
 public:
 	void write(char * fname, float scale);
-private:
+public:
 	int width, height;
+private:
 	int * data;
 };
 
@@ -46,8 +48,9 @@ public:
 	vec3f* operator[](int row);
 public:
 	void write(char * fname, float scale, float gamma=1.f);
-private:
+public:
 	int width, height;
+private:
 	vec3f * data;
 };
 #endif

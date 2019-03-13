@@ -17,6 +17,7 @@ public:
 	vec3f operator*(const vec3f& u);
 	vec3f operator*(float c);
 	vec3f operator/(float c);
+	vec3f operator/(const vec3f& u);
 public:
 	vec3f operator+=(const vec3f& u);
 	vec3f operator*=(float c);

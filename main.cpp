@@ -11,6 +11,7 @@
 #include "hdri.h"
 #include "brdf.h"
 #include "buffers.h"
+#include "adaptive.h"
 
 PrincipledBRDF brdf_objs[64];
 HDRI backdrop;
@@ -22,7 +23,66 @@ vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   return backdrop[row][col];
 }
 
-void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, int n_samples) {
+vec3f gather_radiance(RTCScene scene, RTCRayHit * rh, RTCIntersectContext * context, int depth, int limit) {
+	rtcIntersect1(scene, context, rh);
+	int id = rh->hit.geomID;
+	
+	if (id == -1) {
+		return sample_backdrop(rh, 25.f);
+	}	
+
+	depth++; if (depth == limit) return vec3f(0.f, 0.f, 0.f);
+
+	vec3f hit = eval_ray(rh, rh->ray.tfar);
+	vec3f view = {-rh->ray.dir_x, -rh->ray.dir_y, -rh->ray.dir_z};
+	vec3f normal = {rh->hit.Ng_x, rh->hit.Ng_y, rh->hit.Ng_z};
+
+	view.normalize(); normal.normalize();
+
+	float cos_i = normal.dot(view);
+	int side = 0; if (cos_i < 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;}	
+
+	float roulette = randf();
+
+	float pdf;
+	float r_specular = 0.5f + 0.5f * brdf_objs[id].metallic;
+	float r_diffuse = 1.f - r_specular;
+
+	vec3f light;	
+	if (roulette < r_specular) {
+		light = random_specular(&pdf, brdf_objs[id].roughness, view, normal);
+	} else if (roulette < r_specular + r_diffuse) {
+		light = random_diffuse(&pdf, normal);
+	}
+	vec3f half = view + light;
+	half.normalize();
+
+	float cos_o = normal.dot(light);
+	if (cos_o < 0.f) {
+		return vec3f(0.f, 0.f, 0.f);
+	}
+
+	float cos_th = normal.dot(half);
+	float cos_td = light.dot(half);
+
+	vec3f shade;
+	if (roulette < r_specular) {
+		shade = brdf_objs[id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
+	} else if (roulette < r_specular + r_diffuse) {
+		shade = brdf_objs[id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
+	}
+
+	rh->ray.tnear = 0.01f; rh->ray.tfar = FLT_MAX;
+	rh->hit.instID[0] = -1; rh->hit.geomID = -1;
+	
+	set_org(rh, hit);
+	set_dir(rh, light);
+
+	vec3f bounce = gather_radiance(scene, rh, context, depth, limit);
+	return shade * bounce * cos_o / pdf;	
+}
+
+void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count) {
   RTCRayHit rh;
   RTCIntersectContext context;
   rtcInitIntersectContext(&context);
@@ -31,78 +91,16 @@ void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, int n_samp
 	int id, side = 0;
 	for (int row = 0; row < output->height; row++) {
 		for (int col = 0; col < output->width; col++) {
-			rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
-			rh.hit.instID[0] = -1; rh.hit.geomID = -1;
-
-			set_org(&rh, cam->eye);
-			set_dir(&rh, cam->lookat((float)col + randf(), (float)row + randf()));
-
-			rtcIntersect1(scene, &context, &rh);	
-			id = rh.hit.geomID;
-
-			if (id == -1) {
-				vec3f emit = sample_backdrop(&rh, 25.f);
-				output->add(row, col, emit, n_samples);
-				continue;
-			}
-
-			hit = eval_ray(&rh, rh.ray.tfar);
-			view = {-rh.ray.dir_x, -rh.ray.dir_y, -rh.ray.dir_z};
-			normal = {rh.hit.Ng_x, rh.hit.Ng_y, rh.hit.Ng_z};
-			
-			view.normalize(); normal.normalize();
-			
-			float cos_i = normal.dot(view);
-			side = 0; if (cos_i < 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;}
-
-			/*----begin lighting calculation----*/
+			int n_samples = (*sample_count)[row][col];
 			for (int sample = 0; sample < n_samples; sample++) {
-				float roulette = randf();
-	
-				float pdf;
-				float r_specular = 0.5f + 0.5f * brdf_objs[id].metallic;
-				float r_diffuse = 1.f - r_specular;
-				
-				if (roulette < r_specular) {
-					light = random_specular(&pdf, brdf_objs[id].roughness, view, normal);
-				} else if (roulette < r_specular + r_diffuse) {
-					light = random_diffuse(&pdf, normal);
-				}
-				half = view + light;
-				half.normalize();
-
-				float cos_o = normal.dot(light);
-				if (cos_o < 0.f) {
-					output->add(row, col, {0.f, 0.f, 0.f});
-					continue;
-				}
-
-				float cos_th = normal.dot(half);
-				float cos_td = light.dot(half);
-
-				vec3f shade;
-				if (roulette < r_specular) {
-					shade = brdf_objs[id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
-				} else if (roulette < r_specular + r_diffuse) {
-					shade = brdf_objs[id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
-				}
-
 				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
 				rh.hit.instID[0] = -1; rh.hit.geomID = -1;
+	
+				set_org(&rh, cam->eye);
+				set_dir(&rh, cam->lookat((float)col + randf(), (float)row + randf()));
 
-				set_org(&rh, hit);
-				set_dir(&rh, light);
-			
-				rtcIntersect1(scene, &context, &rh);
-
-				if (rh.hit.geomID == -1) {
-					vec3f emit = sample_backdrop(&rh, 25.f);
-					output->add(row, col, shade * emit * cos_o / pdf);
-				} else {
-					output->add(row, col, {0.f, 0.f, 0.f});
-				}
+				output->add(row, col, gather_radiance(scene, &rh, &context, 0, 2));
 			}
-			/*----end lighting calculation----*/
 		}
 	}
 }
@@ -115,11 +113,10 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-	int n_aa = 1, n_passes = 0;
-  if (argc > 2) n_aa = atoi(argv[2]);
-	if (argc > 3) n_passes = atoi(argv[3]);
+	int n_passes = 0;
+  if (argc > 2) n_passes = atoi(argv[2]);
 
-	printf("Rendering image with %d geometry rays and %d lighting ray(s)\n", n_aa, 1 << n_passes);
+	printf("Rendering image with %d average spp\n", 16 * (1 << n_passes));
 
   srand(time(0));
 	setbuf(stdout, NULL);
@@ -140,16 +137,16 @@ int main(int argc, char** argv) {
   }
 
 	brdf_objs[0].subsurface = 0.f;
-  brdf_objs[0].metallic = 0.0f;
+  brdf_objs[0].metallic = 1.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.3f;
+  brdf_objs[0].roughness = 0.5f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = {65.f / 255.f, 105.f / 255.f, 225.f / 255.f};
+  brdf_objs[0].base_color = {255.f / 255.f, 255.f / 255.f, 255.f / 255.f};
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
@@ -165,24 +162,24 @@ int main(int argc, char** argv) {
 	cam.resize(1920, 1080);
 
 	/*----first pass----*/
-	printf("Prepass: ");
-	for (int aa = 0; aa < n_aa; aa++) {
-		render_pass(scene, &cam, &output, 1);
-		printf("*");
+	printf("Initializng adaptive sampler...\n");
+	IBuffer sample_count(output.width, output.height);
+	for (int row = 0; row < output.height; row++) {
+		for (int col = 0; col < output.width; col++) {
+			sample_count[row][col] = 16;
+		}
 	}
-	printf("\n");
+	render_pass(scene, &cam, &output, &sample_count);
 
 	/*----render----*/
-	printf("Rendering: ");
-	for (int aa = 0; aa < n_aa; aa++) {
-		int n_samples = 1;
-		for (int pass = 0; pass < n_passes; pass++) {
-			render_pass(scene, &cam, &output, n_samples);
-			n_samples += n_samples;
-		}
-		printf("*");
+	printf("Rendering...\n");
+	int n_samples = 16;
+	for (int pass = 0; pass < n_passes; pass++) {
+		adapt_samples(&output, &sample_count, n_samples);
+		sample_count.write((char*)"debug.bmp", 1);
+		render_pass(scene, &cam, &output, &sample_count);
+		n_samples += n_samples;
 	}
-	printf("\n"); 
 
 	/*----write output----*/
 	output.average.write((char*)"out.bmp", 256.f, 2.2f);
