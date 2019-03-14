@@ -82,7 +82,7 @@ vec3f gather_radiance(RTCScene scene, RTCRayHit * rh, RTCIntersectContext * cont
 	return shade * bounce * cos_o / pdf;	
 }
 
-void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count) {
+void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit) {
   RTCRayHit rh;
   RTCIntersectContext context;
   rtcInitIntersectContext(&context);
@@ -99,7 +99,7 @@ void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * 
 				set_org(&rh, cam->eye);
 				set_dir(&rh, cam->lookat((float)col + randf(), (float)row + randf()));
 
-				output->add(row, col, gather_radiance(scene, &rh, &context, 0, 2));
+				output->add(row, col, gather_radiance(scene, &rh, &context, 0, limit));
 			}
 		}
 	}
@@ -140,13 +140,13 @@ int main(int argc, char** argv) {
   brdf_objs[0].metallic = 1.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.5f;
+  brdf_objs[0].roughness = 0.3f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = {255.f / 255.f, 255.f / 255.f, 255.f / 255.f};
+  brdf_objs[0].base_color = {183.f / 255.f, 110.f / 255.f, 121.f / 255.f};
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
@@ -169,19 +169,19 @@ int main(int argc, char** argv) {
 			sample_count[row][col] = 16;
 		}
 	}
-	render_pass(scene, &cam, &output, &sample_count);
+	render_pass(scene, &cam, &output, &sample_count, 3);
 
 	/*----render----*/
 	printf("Rendering...\n");
 	int n_samples = 16;
 	for (int pass = 0; pass < n_passes; pass++) {
 		adapt_samples(&output, &sample_count, n_samples);
-		sample_count.write((char*)"debug.bmp", 1);
-		render_pass(scene, &cam, &output, &sample_count);
+		render_pass(scene, &cam, &output, &sample_count, 3);
 		n_samples += n_samples;
 	}
 
 	/*----write output----*/
+	sample_count.write((char*)"samples.bmp", 1);
 	output.average.write((char*)"out.bmp", 256.f, 2.2f);
 	output.variance.write((char*)"variance.bmp", 256.f);
 }

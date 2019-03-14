@@ -55,11 +55,10 @@ void adapt_samples(RenderBuffer * output, IBuffer * samples, int n) {
 		for (int col = 0; col < w; col++) {
 			vec3f v = output->variance[row][col];
 			vec3f p = output->average[row][col];
-			p = p * p;
-			v = v / p;
-			//watch out for NaN!
-			if (p.x == 0.f) v.x = 0.f; if (p.y == 0.f) v.y = 0.f; if (p.z == 0.f) v.z = 0.f;
-			var[row][col] = fmaxf(fmaxf(v.x, v.y), v.z);
+			float n = v.x + v.y + v.z;
+			float d = sqrtf(p.x + p.y + p.z);
+			if (d == 0.f) var[row][col] = 0.f;
+			else var[row][col] = n / d;
 		}
 	}
 
