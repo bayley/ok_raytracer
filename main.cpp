@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <embree3/rtcore.h>
 #include <math.h>
 #include <float.h>
 #include <time.h>
+
+#include <embree3/rtcore.h>
+#include <SDL2/SDL.h>
 
 #include "obj_loader.h"
 #include "geom.h"
@@ -15,6 +17,33 @@
 
 PrincipledBRDF brdf_objs[64];
 HDRI backdrop;
+SDL_Window * window; SDL_Renderer * renderer;
+
+void init_preview(RenderBuffer * b) {
+	SDL_Init(SDL_INIT_VIDEO);
+	window = SDL_CreateWindow("Render Output", 
+														 SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+										 				 b->width, b->height, SDL_WINDOW_OPENGL);
+	renderer = SDL_CreateRenderer(window, -1, 0);
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+	SDL_RenderClear(renderer);
+	SDL_RenderPresent(renderer);
+}
+
+void update_preview(RenderBuffer * buf, int row_start, int col_start, int row_size, int col_size) {
+	for (int x = col_start; x < col_start + col_size; x++) {
+		for (int y = row_start; y < row_start + row_size; y++) {
+			vec3f p = buf->average[y][x];
+			int r, g, b;
+			r = (int)(255.f * powf(fminf(p.x, 1.f), 1.f / 2.2f));
+			g = (int)(255.f * powf(fminf(p.y, 1.f), 1.f / 2.2f));
+			b = (int)(255.f * powf(fminf(p.z, 1.f), 1.f / 2.2f));
+			SDL_SetRenderDrawColor(renderer, r, g, b, 0);
+			SDL_RenderDrawPoint(renderer, x, buf->height - 1 - y);
+		}
+	}
+	SDL_RenderPresent(renderer);
+}
 
 vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   vec3f uv = intersect_backdrop(rh, radius);
@@ -82,15 +111,15 @@ vec3f gather_radiance(RTCScene scene, RTCRayHit * rh, RTCIntersectContext * cont
 	return shade * bounce * cos_o / pdf;	
 }
 
-void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit) {
+void render_tile(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int row_start, int col_start, int size, int limit) {
   RTCRayHit rh;
   RTCIntersectContext context;
   rtcInitIntersectContext(&context);
 
 	vec3f hit, view, light, normal, half;
 	int id, side = 0;
-	for (int row = 0; row < output->height; row++) {
-		for (int col = 0; col < output->width; col++) {
+	for (int row = row_start; row < row_start + size; row++) {
+		for (int col = col_start; col < col_start + size; col++) {
 			int n_samples = (*sample_count)[row][col];
 			for (int sample = 0; sample < n_samples; sample++) {
 				rh.ray.tnear = 0.01f; rh.ray.tfar = FLT_MAX;
@@ -105,16 +134,38 @@ void render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * 
 	}
 }
 
+int render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit, bool display_preview = true) {
+	SDL_Event event;
+	for (int row_start = 0; row_start < output->height; row_start += 32) {
+		for (int col_start = 0; col_start < output->width; col_start += 32) {
+			render_tile(scene, cam, output, sample_count, row_start, col_start, 32, 3);
+			if (display_preview) {
+				update_preview(output, row_start, col_start, 32, 32);
+				SDL_PollEvent(&event);
+				if (event.type == SDL_QUIT) {
+					SDL_Quit();
+					return -1;
+				}
+			}
+		}
+	}
+	return 1;
+}
+
 int main(int argc, char** argv) {
-	/*----test code goes here----*/
 	/*----parse arguments, setup----*/
   if (argc < 2) {
-    printf("Usage: embree_test <filename> [n_aa] [n_samples]\n");
+    printf("Usage: embree_test <filename> [n_samples]\n");
     return -1;
   }
 
 	int n_passes = 0;
   if (argc > 2) n_passes = atoi(argv[2]);
+
+	bool display_preview = true;
+	if (argc > 3) {
+		if (strcmp(argv[3], "silent") == 0) display_preview = false;
+	}
 
 	printf("Rendering image with %d average spp\n", 16 * (1 << n_passes));
 
@@ -140,19 +191,19 @@ int main(int argc, char** argv) {
   brdf_objs[0].metallic = 1.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.3f;
+  brdf_objs[0].roughness = 0.5f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = {183.f / 255.f, 110.f / 255.f, 121.f / 255.f};
+  brdf_objs[0].base_color = {1.f, 1.f, 1.f};
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
 
 	/*----set up camera----*/
-  RenderBuffer output(1920, 1080);
+  RenderBuffer output(1920, 1088);
 
   Camera cam;
   cam.move(5.f, 8.f, 2.f);
@@ -160,6 +211,9 @@ int main(int argc, char** argv) {
   cam.zoom(1.2f);
   cam.resize(output.width, output.height);
 	cam.resize(1920, 1080);
+
+	/*----set up preview----*/
+	if (display_preview) init_preview(&output);
 
 	/*----first pass----*/
 	printf("Initializng adaptive sampler...\n");
@@ -169,14 +223,20 @@ int main(int argc, char** argv) {
 			sample_count[row][col] = 16;
 		}
 	}
-	render_pass(scene, &cam, &output, &sample_count, 3);
+	if (render_pass(scene, &cam, &output, &sample_count, 3, display_preview) < 0) {
+		printf("Killed, no output written\n");
+		return -1;
+	}
 
 	/*----render----*/
 	printf("Rendering...\n");
 	int n_samples = 16;
 	for (int pass = 0; pass < n_passes; pass++) {
 		adapt_samples(&output, &sample_count, n_samples);
-		render_pass(scene, &cam, &output, &sample_count, 3);
+		if (render_pass(scene, &cam, &output, &sample_count, 3, display_preview) < 0) {
+			printf("Killed, no output written\n");
+			return -1;
+		}
 		n_samples += n_samples;
 	}
 
@@ -184,5 +244,8 @@ int main(int argc, char** argv) {
 	sample_count.write((char*)"samples.bmp", 1);
 	output.average.write((char*)"out.bmp", 256.f, 2.2f);
 	output.variance.write((char*)"variance.bmp", 256.f);
+
+	/*----clean up SDL----*/
+	if (display_preview) SDL_Quit();
 }
 
