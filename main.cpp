@@ -13,6 +13,7 @@
 #include "obj_loader.h"
 #include "geom.h"
 #include "ray_utils.h"
+#include "sampling.h"
 #include "hdri.h"
 #include "brdf.h"
 #include "buffers.h"
@@ -78,17 +79,28 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 	float cos_i = normal.dot(view);
 	int side = 0; if (cos_i < 0.f) {normal *= -1.f; side = 1; cos_i = -cos_i;}	
 
+	PrincipledBRDF * brdf = &brdf_objs[id];
+
 	float roulette = randf();
 
-	float pdf_s, pdf_d;
-	float r_specular = 0.5f + 0.5f * brdf_objs[id].metallic;
+	//try to pick # of samples according to a power estimate
+	float r_specular = 0.5f + 0.5f * brdf->metallic;
 	float r_diffuse = 1.f - r_specular;
 
+	float p_specular = lerp(0.08f, 1.f, brdf->metallic) * brdf->specular;
+	float p_cc = 0.04f * brdf->clearcoat;
+
+	float r_clearcoat = p_cc / (p_specular + p_cc) * r_specular;
+	r_specular = r_specular - r_clearcoat;
+
 	vec3f light;	
+	pdf_data pdfs;
 	if (roulette < r_specular) {
-		light = random_specular(&pdf_s, &pdf_d, brdf_objs[id].roughness, view, normal);
-	} else if (roulette < r_specular + r_diffuse) {
-		light = random_diffuse(&pdf_s, &pdf_d, brdf_objs[id].roughness, view, normal);
+		light = random_specular(&pdfs, brdf, view, normal);
+	} else if (roulette < r_specular + r_clearcoat) {
+		light = random_clearcoat(&pdfs, brdf, view, normal);
+	} else if (roulette < r_specular + r_clearcoat + r_diffuse) {
+		light = random_diffuse(&pdfs, brdf, view, normal);
 	}
 	vec3f half = view + light;
 	half.normalize();
@@ -101,7 +113,7 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 	float cos_th = normal.dot(half);
 	float cos_td = light.dot(half);
 
-	vec3f shade = brdf_objs[id].sample_specular(cos_i, cos_o, cos_th, cos_td) + brdf_objs[id].sample_diffuse(cos_i, cos_o, cos_th, cos_td);
+	vec3f shade = brdf->sample(cos_i, cos_o, cos_th, cos_td);
 
 	rh->ray.tnear = 0.01f; rh->ray.tfar = FLT_MAX;
 	rh->hit.instID[0] = -1; rh->hit.geomID = -1;
@@ -109,7 +121,7 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 	set_org(rh, hit);
 	set_dir(rh, light);
 
-	float pdf = r_specular * pdf_s + r_diffuse * pdf_d;
+	float pdf = r_specular * pdfs.pdf_s + r_clearcoat * pdfs.pdf_c + r_diffuse * pdfs.pdf_d;
 	vec3f bounce = gather_radiance(scene, rh, context, depth, limit);
 	return shade * bounce * cos_o / pdf;	
 }
@@ -228,16 +240,16 @@ int main(int argc, char** argv) {
 	vec3f steel = {230.f / 255.f, 207.f / 255.f, 176.f / 255.f};
 
 	brdf_objs[0].subsurface = 0.f;
-  brdf_objs[0].metallic = 0.5f;
+  brdf_objs[0].metallic = 1.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.3f;
+  brdf_objs[0].roughness = 0.5f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = light_blue;
+  brdf_objs[0].base_color = white;
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);

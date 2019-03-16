@@ -87,7 +87,7 @@ vec3f PrincipledBRDF::sample_specular(float ci, float co, float c_th, float c_td
 	vec3f F_m = base_color * specular; //TODO: fresnel term for metals
 
 	//specular D, G
-	float alpha = fmaxf(roughness * roughness, 0.001f);
+	float alpha = fmaxf(0.001f, roughness * roughness);
 	float D_spec = GTR2(alpha, c_th);
 	float G_spec = GGX(alpha, ci) * GGX(alpha, co);
 
@@ -103,4 +103,50 @@ vec3f PrincipledBRDF::sample_specular(float ci, float co, float c_th, float c_td
 	r_specular = lerp(Fi_spec + Fg_spec, F_m, metallic) * D_spec * G_spec;
 
 	return r_specular + r_clearcoat;
+}
+
+vec3f PrincipledBRDF::sample(float ci, float co, float c_th, float c_td) {
+	vec3f ones = {1.f, 1.f, 1.f};
+	vec3f r_diffuse, r_sheen, r_specular, r_clearcoat = {0.f, 0.f, 0.f};
+
+	float F_co, F_ci, F_c_td;
+	F_co = schlick_F(co);
+	F_ci = schlick_F(ci);
+	F_c_td = schlick_F(c_td);
+
+	//diffuse
+	float fd90 = .5f + 2.f * c_td * c_td * roughness;
+	float fd = 1.f / M_PI * lerp(1.f, fd90, F_co) * lerp(1.f, fd90, F_ci);
+
+	float fss90 = c_td * c_td * roughness;
+	float fss = lerp(1.f, fss90, F_co) * lerp(1.f, fss90, F_ci);
+	float ss = 1.25f / M_PI * (fss * (1.f / (co + ci) - .5f) + .5f);
+
+	r_diffuse = base_color * lerp(fd, ss, subsurface) * (1.f - metallic);
+
+	//sheen
+	r_sheen = lerp(ones, base_color, sheentint) * sheen * F_c_td * (1.f - metallic);
+
+	//specular F
+	vec3f Fi_spec = lerp(ones, base_color, speculartint) * specular * 0.08f; //incident
+	vec3f Fg_spec = ones * (1 - specular * 0.08f) * F_c_td; //grazing
+	vec3f F_m = base_color * specular; //TODO: fresnel term for metals
+
+	//specular D, G
+	float alpha = fmaxf(0.001f, roughness * roughness);
+	float D_spec = GTR2(alpha, c_th);
+	float G_spec = GGX(alpha, ci) * GGX(alpha, co);
+
+	//clearcoat
+	if (clearcoat > 0.f) {
+		vec3f F_cc = ones * lerp(.04f, 1.f, F_c_td);
+		float D_cc = GTR1(lerp(.1f, 0.001f, clearcoatgloss), c_th);
+		float G_cc = GGX(.25f, ci) * GGX(.25f, co);
+		r_clearcoat = F_cc * D_cc * G_cc * clearcoat * 0.25f;
+	}
+
+	//interpolate specular between dielectric and metallic
+	r_specular = lerp(Fi_spec + Fg_spec, F_m, metallic) * D_spec * G_spec;
+
+	return r_diffuse + r_sheen + r_specular + r_clearcoat;
 }
