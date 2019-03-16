@@ -2,8 +2,11 @@
 #define __RAY_UTILS_H
 
 #include <stdlib.h>
-#include <embree3/rtcore.h>
+#include <random>
 #include <math.h>
+#include <thread>
+
+#include <embree3/rtcore.h>
 
 #include "geom.h"
 
@@ -29,8 +32,9 @@ inline vec3f local_u(vec3f hit_n) {
 }
 
 inline float randf() {
-	float u = (float)((double)(rand()) / (double)(RAND_MAX));
-	return fminf(u, 1.f - FLT_EPSILON);
+	static thread_local std::mt19937 generator;
+	std::uniform_real_distribution<float> distribution(0.f, 1.f);
+	return fminf(distribution(generator), 1 - FLT_EPSILON);
 }
 
 inline vec3f random_diffuse(float * pdf, vec3f n) {

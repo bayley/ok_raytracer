@@ -6,6 +6,9 @@
 
 #include <embree3/rtcore.h>
 #include <SDL2/SDL.h>
+#include <tbb/task_scheduler_init.h>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 
 #include "obj_loader.h"
 #include "geom.h"
@@ -15,10 +18,13 @@
 #include "buffers.h"
 #include "adaptive.h"
 
+using namespace tbb;
+
 PrincipledBRDF brdf_objs[64];
 HDRI backdrop;
 SDL_Window * window; SDL_Renderer * renderer;
 
+/*----preview window----*/
 void init_preview(RenderBuffer * b) {
 	SDL_Init(SDL_INIT_VIDEO);
 	window = SDL_CreateWindow("Render Output", 
@@ -45,6 +51,7 @@ void update_preview(RenderBuffer * buf, int row_start, int col_start, int row_si
 	SDL_RenderPresent(renderer);
 }
 
+/*----radiance computation----*/
 vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   vec3f uv = intersect_backdrop(rh, radius);
   int row = (int)(backdrop.height * uv.y);
@@ -52,8 +59,8 @@ vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   return backdrop[row][col];
 }
 
-vec3f gather_radiance(RTCScene scene, RTCRayHit * rh, RTCIntersectContext * context, int depth, int limit) {
-	rtcIntersect1(scene, context, rh);
+vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * context, int depth, int limit) {
+	rtcIntersect1(*scene, context, rh);
 	int id = rh->hit.geomID;
 	
 	if (id == -1) {
@@ -111,7 +118,9 @@ vec3f gather_radiance(RTCScene scene, RTCRayHit * rh, RTCIntersectContext * cont
 	return shade * bounce * cos_o / pdf;	
 }
 
-void render_tile(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int row_start, int col_start, int size, int limit) {
+/*----rendering and threading----*/
+
+void render_tile(RTCScene * scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit, int row_start, int col_start, int size) {
   RTCRayHit rh;
   RTCIntersectContext context;
   rtcInitIntersectContext(&context);
@@ -134,21 +143,47 @@ void render_tile(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * 
 	}
 }
 
-int render_pass(RTCScene scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit, bool display_preview = true) {
+class apply_render_tile {
+	RTCScene * __scene; Camera * __cam; RenderBuffer * __output; IBuffer * __sample_count;
+	int __limit, __tile_size;
+public:
+	void operator() (const blocked_range<int> &r) const {
+		int tile_w = __output->width / __tile_size;
+		for (int tile = r.begin(); tile < r.end(); tile++) {
+			int row_start = __tile_size * (tile / tile_w);
+			int col_start = __tile_size * (tile % tile_w);
+			render_tile(__scene, __cam, __output, __sample_count, __limit, row_start, col_start,  __tile_size);
+		}
+	}
+	apply_render_tile(RTCScene * scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit, int tile_size) {
+		__scene = scene; __cam = cam; __output = output; __sample_count = sample_count; __limit = limit; __tile_size = tile_size;
+	}
+};
+
+int render_pass(RTCScene * scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit, int tile_size, bool display_preview = false) {
 	SDL_Event event;
-	for (int row_start = 0; row_start < output->height; row_start += 32) {
-		for (int col_start = 0; col_start < output->width; col_start += 32) {
-			render_tile(scene, cam, output, sample_count, row_start, col_start, 32, 3);
-			if (display_preview) {
-				update_preview(output, row_start, col_start, 32, 32);
-				SDL_PollEvent(&event);
-				if (event.type == SDL_QUIT) {
-					SDL_Quit();
-					return -1;
-				}
+	int tile_w = output->width / tile_size, tile_h = output->height / tile_size;
+	int tile_count = tile_w * tile_h;
+	for (int tile = 0; tile < tile_count; tile++) {
+		int row_start = tile_size * (tile / tile_w);
+		int col_start = tile_size * (tile % tile_w);
+		render_tile(scene, cam, output, sample_count, 3, row_start, col_start, tile_size);
+		if (display_preview) {
+			update_preview(output, row_start, col_start, tile_size, tile_size);
+			SDL_PollEvent(&event);
+			if (event.type == SDL_QUIT) {
+				SDL_Quit();
+				return -1;
 			}
 		}
 	}
+	return 1;
+}
+
+int render_pass_tbb(RTCScene * scene, Camera * cam, RenderBuffer * output, IBuffer * sample_count, int limit, int tile_size, bool display_preview = false) {
+	int tile_w = output->width / tile_size, tile_h = output->height / tile_size;
+	int tile_count = tile_w * tile_h;
+	parallel_for(blocked_range<int>(0, tile_count), apply_render_tile(scene, cam, output, sample_count, limit, tile_size));
 	return 1;
 }
 
@@ -171,6 +206,8 @@ int main(int argc, char** argv) {
 
   srand(time(0));
 	setbuf(stdout, NULL);
+
+	task_scheduler_init tbb_init;
 
 	/*----load scene----*/
   RTCDevice device = rtcNewDevice("");
@@ -203,14 +240,13 @@ int main(int argc, char** argv) {
 	rtcCommitScene(scene);
 
 	/*----set up camera----*/
-  RenderBuffer output(1920, 1088);
+  RenderBuffer output(2048, 1088);
 
   Camera cam;
   cam.move(5.f, 8.f, 2.f);
   cam.point(-1.f, -1.5f, 0.f);
   cam.zoom(1.2f);
   cam.resize(output.width, output.height);
-	cam.resize(1920, 1080);
 
 	/*----set up preview----*/
 	if (display_preview) init_preview(&output);
@@ -223,29 +259,46 @@ int main(int argc, char** argv) {
 			sample_count[row][col] = 16;
 		}
 	}
-	if (render_pass(scene, &cam, &output, &sample_count, 3, display_preview) < 0) {
+	if (render_pass_tbb(&scene, &cam, &output, &sample_count, 3, 32, display_preview) < 0) {
 		printf("Killed, no output written\n");
 		return -1;
 	}
+	if (display_preview) update_preview(&output, 0, 0, output.height, output.width);
 
 	/*----render----*/
 	printf("Rendering...\n");
 	int n_samples = 16;
 	for (int pass = 0; pass < n_passes; pass++) {
 		adapt_samples(&output, &sample_count, n_samples);
-		if (render_pass(scene, &cam, &output, &sample_count, 3, display_preview) < 0) {
+		if (render_pass_tbb(&scene, &cam, &output, &sample_count, 3, 32, display_preview) < 0) {
 			printf("Killed, no output written\n");
 			return -1;
 		}
+		if (display_preview) update_preview(&output, 0, 0, output.height, output.width);
 		n_samples += n_samples;
 	}
+	printf("Done!\n");
 
 	/*----write output----*/
 	sample_count.write((char*)"samples.bmp", 1);
 	output.average.write((char*)"out.bmp", 256.f, 2.2f);
 	output.variance.write((char*)"variance.bmp", 256.f);
 
+	/*----wait for user to exit----*/
+	if (display_preview) {
+		SDL_Event event;
+		for (;;) {
+			SDL_PollEvent(&event);
+			if (event.type == SDL_QUIT) {
+				SDL_Quit();		
+				break;
+			}
+		}
+	}
+
 	/*----clean up SDL----*/
 	if (display_preview) SDL_Quit();
+
+	return 1;
 }
 
