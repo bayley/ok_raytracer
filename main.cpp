@@ -197,9 +197,12 @@ int main(int argc, char** argv) {
 	int n_passes = 0;
   if (argc > 2) n_passes = atoi(argv[2]);
 
+	int depth = 3;
+	if (argc > 3) depth = atoi(argv[3]);
+
 	bool display_preview = true;
-	if (argc > 3) {
-		if (strcmp(argv[3], "silent") == 0) display_preview = false;
+	if (argc > 4) {
+		if (strcmp(argv[4], "silent") == 0) display_preview = false;
 	}
 
 	printf("Rendering image with %d average spp\n", 16 * (1 << n_passes));
@@ -225,16 +228,16 @@ int main(int argc, char** argv) {
   }
 
 	brdf_objs[0].subsurface = 0.f;
-  brdf_objs[0].metallic = 1.0f;
+  brdf_objs[0].metallic = 0.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.5f;
+  brdf_objs[0].roughness = 1.0f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = {1.f, 1.f, 1.f};
+  brdf_objs[0].base_color = {65.f / 255.f, 105.f / 255.f, 225.f / 255.f};
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
@@ -259,7 +262,7 @@ int main(int argc, char** argv) {
 			sample_count[row][col] = 16;
 		}
 	}
-	if (render_pass_tbb(&scene, &cam, &output, &sample_count, 3, 32, display_preview) < 0) {
+	if (render_pass_tbb(&scene, &cam, &output, &sample_count, depth, 32, display_preview) < 0) {
 		printf("Killed, no output written\n");
 		return -1;
 	}
@@ -270,7 +273,7 @@ int main(int argc, char** argv) {
 	int n_samples = 16;
 	for (int pass = 0; pass < n_passes; pass++) {
 		adapt_samples(&output, &sample_count, n_samples);
-		if (render_pass_tbb(&scene, &cam, &output, &sample_count, 3, 32, display_preview) < 0) {
+		if (render_pass_tbb(&scene, &cam, &output, &sample_count, depth, 32, display_preview) < 0) {
 			printf("Killed, no output written\n");
 			return -1;
 		}
