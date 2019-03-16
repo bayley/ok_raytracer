@@ -37,7 +37,7 @@ inline float randf() {
 	return fminf(distribution(generator), 1 - FLT_EPSILON);
 }
 
-inline vec3f random_diffuse(float * pdf, vec3f n) {
+inline vec3f random_diffuse(float * pdf_s, float * pdf_d, float roughness, vec3f view, vec3f n) {
   vec3f u = local_u(n);
   vec3f v = n.cross(u);
 
@@ -52,12 +52,21 @@ inline vec3f random_diffuse(float * pdf, vec3f n) {
 	float c_v = sin_theta * sinf(hit_phi);
 
 	vec3f out_dir = u * c_u + v * c_v + n * cos_theta;
-	*pdf = cos_theta / M_PI;
+	*pdf_d = cos_theta / M_PI;
+	
+	vec3f half = view + out_dir;
+	half.normalize();
+
+	float alpha = fmaxf(0.001f, roughness * roughness);
+	float a2 = alpha * alpha;	
+	float cos_theta_h = half.dot(n);
+	float t = 1.f + (a2 - 1.f) * cos_theta_h * cos_theta_h;
+	*pdf_s = a2 / M_PI * 1.f / (t * t) * cos_theta_h / (4.f * out_dir.dot(half));
 
   return out_dir;
 }
 
-inline vec3f random_specular(float * pdf, float roughness, vec3f view, vec3f n) {
+inline vec3f random_specular(float * pdf_s, float * pdf_d, float roughness, vec3f view, vec3f n) {
   vec3f u = local_u(n);
   vec3f v = n.cross(u);
 
@@ -77,7 +86,10 @@ inline vec3f random_specular(float * pdf, float roughness, vec3f view, vec3f n) 
 	vec3f out_dir = half * 2.f * view.dot(half) - view;
 
 	float t = 1.f + (a2 - 1.f) * cos_theta_h * cos_theta_h;
-	*pdf = a2 / M_PI * 1.f / (t * t) * cos_theta_h / (4.f * out_dir.dot(half));
+	*pdf_s = a2 / M_PI * 1.f / (t * t) * cos_theta_h / (4.f * out_dir.dot(half));
+
+	float cos_theta = out_dir.dot(n);
+	*pdf_d = cos_theta / M_PI;
 
   return out_dir;
 }

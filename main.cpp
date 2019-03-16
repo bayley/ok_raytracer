@@ -80,15 +80,15 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 
 	float roulette = randf();
 
-	float pdf;
+	float pdf_s, pdf_d;
 	float r_specular = 0.5f + 0.5f * brdf_objs[id].metallic;
 	float r_diffuse = 1.f - r_specular;
 
 	vec3f light;	
 	if (roulette < r_specular) {
-		light = random_specular(&pdf, brdf_objs[id].roughness, view, normal);
+		light = random_specular(&pdf_s, &pdf_d, brdf_objs[id].roughness, view, normal);
 	} else if (roulette < r_specular + r_diffuse) {
-		light = random_diffuse(&pdf, normal);
+		light = random_diffuse(&pdf_s, &pdf_d, brdf_objs[id].roughness, view, normal);
 	}
 	vec3f half = view + light;
 	half.normalize();
@@ -101,12 +101,7 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 	float cos_th = normal.dot(half);
 	float cos_td = light.dot(half);
 
-	vec3f shade;
-	if (roulette < r_specular) {
-		shade = brdf_objs[id].sample_specular(cos_i, cos_o, cos_th, cos_td) / r_specular;
-	} else if (roulette < r_specular + r_diffuse) {
-		shade = brdf_objs[id].sample_diffuse(cos_i, cos_o, cos_th, cos_td) / r_diffuse;
-	}
+	vec3f shade = brdf_objs[id].sample_specular(cos_i, cos_o, cos_th, cos_td) + brdf_objs[id].sample_diffuse(cos_i, cos_o, cos_th, cos_td);
 
 	rh->ray.tnear = 0.01f; rh->ray.tfar = FLT_MAX;
 	rh->hit.instID[0] = -1; rh->hit.geomID = -1;
@@ -114,6 +109,7 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 	set_org(rh, hit);
 	set_dir(rh, light);
 
+	float pdf = r_specular * pdf_s + r_diffuse * pdf_d;
 	vec3f bounce = gather_radiance(scene, rh, context, depth, limit);
 	return shade * bounce * cos_o / pdf;	
 }
@@ -232,16 +228,16 @@ int main(int argc, char** argv) {
 	vec3f steel = {230.f / 255.f, 207.f / 255.f, 176.f / 255.f};
 
 	brdf_objs[0].subsurface = 0.f;
-  brdf_objs[0].metallic = 1.0f;
+  brdf_objs[0].metallic = 0.5f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.5f;
+  brdf_objs[0].roughness = 0.3f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = steel;
+  brdf_objs[0].base_color = light_blue;
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
