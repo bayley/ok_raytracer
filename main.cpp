@@ -60,6 +60,17 @@ vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   return backdrop[row][col];
 }
 
+inline void pick_frequencies(float * r_specular, float * r_clearcoat, float * r_diffuse, PrincipledBRDF * brdf) {
+	*r_specular = 0.5f + 0.5f * brdf->metallic;
+	*r_diffuse = 1.f - *r_specular;
+
+	float p_specular = lerp(0.08f, 1.f, brdf->metallic) * brdf->specular;
+	float p_cc = 0.04f * brdf->clearcoat;
+
+	*r_clearcoat = p_cc / (p_specular + p_cc) * *r_specular;
+	*r_specular = *r_specular - *r_clearcoat;
+}
+
 vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * context, int depth, int limit) {
 	rtcIntersect1(*scene, context, rh);
 	int id = rh->hit.geomID;
@@ -83,15 +94,8 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 
 	float roulette = randf();
 
-	//try to pick # of samples according to a power estimate
-	float r_specular = 0.5f + 0.5f * brdf->metallic;
-	float r_diffuse = 1.f - r_specular;
-
-	float p_specular = lerp(0.08f, 1.f, brdf->metallic) * brdf->specular;
-	float p_cc = 0.04f * brdf->clearcoat;
-
-	float r_clearcoat = p_cc / (p_specular + p_cc) * r_specular;
-	r_specular = r_specular - r_clearcoat;
+	float r_specular, r_clearcoat, r_diffuse;
+	pick_frequencies(&r_specular, &r_clearcoat, &r_diffuse, brdf);
 
 	vec3f light;	
 	pdf_data pdfs;
