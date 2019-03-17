@@ -28,7 +28,6 @@ int load_obj(RTCDevice device, RTCScene scene, char * fname, int id) {
   while ((nread = getline(&line, &len, in)) != -1) {
     if (line[0] == 'v') {
       sscanf(line, "%s %f %f %f", fn, &x, &y, &z);
-      //vertices[v_index].x = x * 0.5; vertices[v_index].y = -z* 0.5; vertices[v_index].z = y * 0.5;
       vertices[v_index].x = x; vertices[v_index].y = y; vertices[v_index].z = z;
       v_index++;
     } else if (line[0] == 'f') {

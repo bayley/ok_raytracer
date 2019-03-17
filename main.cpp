@@ -53,6 +53,7 @@ void update_preview(RenderBuffer * buf, int row_start, int col_start, int row_si
 }
 
 /*----radiance computation----*/
+
 vec3f sample_backdrop(RTCRayHit * rh, float radius) {
   vec3f uv = intersect_backdrop(rh, radius);
   int row = (int)(backdrop.height * uv.y);
@@ -92,9 +93,8 @@ vec3f gather_radiance(RTCScene * scene, RTCRayHit * rh, RTCIntersectContext * co
 
 	PrincipledBRDF * brdf = &brdf_objs[id];
 
-	float roulette = randf();
-
 	float r_specular, r_clearcoat, r_diffuse;
+	float roulette = randf();
 	pick_frequencies(&r_specular, &r_clearcoat, &r_diffuse, brdf);
 
 	vec3f light;	
@@ -247,13 +247,13 @@ int main(int argc, char** argv) {
   brdf_objs[0].metallic = 1.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.5f;
+  brdf_objs[0].roughness = 0.3f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = white;
+  brdf_objs[0].base_color = steel;
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
