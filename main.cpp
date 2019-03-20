@@ -244,16 +244,16 @@ int main(int argc, char** argv) {
 	vec3f steel = {230.f / 255.f, 207.f / 255.f, 176.f / 255.f};
 
 	brdf_objs[0].subsurface = 0.f;
-  brdf_objs[0].metallic = 1.0f;
+  brdf_objs[0].metallic = 0.0f;
   brdf_objs[0].specular = 1.0f;
   brdf_objs[0].speculartint = 0.f;
-  brdf_objs[0].roughness = 0.3f;
+  brdf_objs[0].roughness = 0.9f;
   brdf_objs[0].anisotropic = 0.f;
   brdf_objs[0].sheen = 0.f;
   brdf_objs[0].sheentint = 0.f;
   brdf_objs[0].clearcoat = 0.0f;
   brdf_objs[0].clearcoatgloss = 0.0f;
-  brdf_objs[0].base_color = steel;
+  brdf_objs[0].base_color = white;
 
 	printf("Building BVH...\n");
 	rtcCommitScene(scene);
